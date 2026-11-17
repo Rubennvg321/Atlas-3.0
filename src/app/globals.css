@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #c8922a;
+  --color-brand-dark: #a97616;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html { -webkit-tap-highlight-color: transparent; }
+body { @apply bg-stone-100 text-stone-900 antialiased; }
+@media (max-width: 767px) { input, select, textarea { font-size: 16px !important; } } /* voorkomt inzoomen op iPhone */

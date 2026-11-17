@@ -1,0 +1,66 @@
+import Link from "next/link";
+import { getDb } from "@/db";
+import { getMyTasks, trajectsWithoutAction } from "@/server/queries";
+import { getStages } from "@/server/trajects";
+import { Card, PageHeader } from "@/components/server-ui";
+import { TaskItem } from "@/components/traject-client";
+import { isoDay } from "@/lib/format";
+
+export const metadata = { title: "Taken" };
+
+export default async function TasksPage() {
+  const db = getDb();
+  const [rows, idle, stages] = await Promise.all([getMyTasks(db), trajectsWithoutAction(db), getStages(db)]);
+  const today = isoDay(new Date());
+  const weekEnd = isoDay(new Date(Date.now() + 7 * 86400000));
+  const groups = {
+    "Te laat": rows.filter((r) => r.task.dueAt && isoDay(r.task.dueAt) < today),
+    Vandaag: rows.filter((r) => r.task.dueAt && isoDay(r.task.dueAt) === today),
+    "Komende 7 dagen": rows.filter((r) => r.task.dueAt && isoDay(r.task.dueAt) > today && isoDay(r.task.dueAt) <= weekEnd),
+    Later: rows.filter((r) => r.task.dueAt && isoDay(r.task.dueAt) > weekEnd),
+    "Zonder deadline": rows.filter((r) => !r.task.dueAt),
+  };
+  return (
+    <div className="mx-auto max-w-3xl space-y-4">
+      <PageHeader title="Taken" />
+      {Object.entries(groups).map(([label, items]) =>
+        items.length || label === "Vandaag" ? (
+          <Card key={label} title={`${label} (${items.length})`} className={label === "Te laat" ? "border-red-200" : ""}>
+            {items.length ? (
+              <ul className="divide-y divide-stone-100">
+                {items.map((r) => (
+                  <div key={r.task.id}>
+                    <TaskItem path="/taken" task={{ id: r.task.id, title: r.task.title, dueAt: r.task.dueAt?.toISOString() ?? null, doneAt: null }} />
+                    <Link href={`/trajecten/${r.task.trajectId}`} className="-mt-1 mb-2 block pl-8 text-xs text-sky-700 underline">
+                      {r.customerName}
+                      {r.city ? `, ${r.city}` : ""} · #{r.trajectNumber}
+                    </Link>
+                  </div>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-stone-500">Niets voor vandaag.</p>
+            )}
+          </Card>
+        ) : null,
+      )}
+      {idle.length > 0 && (
+        <Card title={`Lopende trajecten zonder volgende actie (${idle.length})`} className="border-amber-200">
+          <ul className="space-y-1 text-sm">
+            {idle.map((t) => (
+              <li key={t.id}>
+                <Link href={`/trajecten/${t.id}`} className="underline">
+                  {t.name}
+                </Link>
+                <span className="text-stone-500">
+                  {" "}
+                  · {t.city ?? ""} · {stages.find((s) => s.key === t.stage)?.label}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+    </div>
+  );
+}

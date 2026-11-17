@@ -46,11 +46,12 @@ export async function createTraject(
     userId: actor.userId ?? null,
     reason: "Traject aangemaakt",
   });
+  const [st] = await db.select({ label: pipelineStages.label }).from(pipelineStages).where(eq(pipelineStages.key, stage));
   await addTimeline(db, {
     customerId: input.customerId,
     trajectId: t.id,
     type: "traject_aangemaakt",
-    title: `Traject aangemaakt in fase ${stage}`,
+    title: `Traject aangemaakt in fase ${st?.label ?? stage}`,
     actorUserId: actor.userId,
   });
   return t;

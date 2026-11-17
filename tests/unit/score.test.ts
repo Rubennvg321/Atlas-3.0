@@ -78,6 +78,14 @@ describe("scoreMatch: automatisch koppelen", () => {
   });
 });
 
+describe("scoreMatch: niet-Nederlandse achternamen", () => {
+  it("'El Amrani' met zelfde telefoon wordt automatisch gekoppeld", () => {
+    const a = p({ name: "Fatima El Amrani", phone: "0623456789" });
+    const b = p({ names: ["Fatima El Amrani"], phone: "+31 6 23456789", email: "f.elamrani@gmail.com" });
+    expect(scoreMatch(b, a).decision).toBe("auto");
+  });
+});
+
 describe("scoreMatch: twijfel ('Mogelijk dubbel')", () => {
   it("partner met eigen naam en eigen e-mail op hetzelfde adres", () => {
     const partner = p({ name: "Sanne Bakker", email: "sanne.bakker@hotmail.com", phone: "0687654321", postcode: "6511AB", nr: "12" });
@@ -160,6 +168,8 @@ describe("lastNameSimilarity", () => {
     ["Jan Vanderberg", "Jan van der Berg", 0.9],
     ["Anna de Vries-Bakker", "Anna Bakker", 0.97],
     ["Kees Meijer", "Kees Meyer", 0.95],
+    ["Fatima El Amrani", "F. Amrani", 0.95],
+    ["Fatima El Amrani", "Fatima Elamrani", 0.9],
   ])("%s ~ %s >= %d", (a, b, min) => expect(lastNameSimilarity(n(a), n(b))).toBeGreaterThanOrEqual(min));
 
   it.each([

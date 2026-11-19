@@ -31,6 +31,9 @@ while [[ "$ENDPOINT" != *:* ]]; do
 done
 PGHOST="${ENDPOINT%:*}"; PGPORT="${ENDPOINT##*:}"
 
+echo
+read -r -p "     Gebruikersnaam van de database (exact zoals in Scaleway → Users, let op hoofdletters) [Atlas]: " PGUSER_IN
+PGUSER_IN="$(echo "${PGUSER_IN:-Atlas}" | tr -d '[:space:]')"
 ask "2/5  Plak het database-wachtwoord:" PGPASSWORD hidden
 ask "3/5  Plak het Client-ID van Google (eindigt op .apps.googleusercontent.com):" GID
 ask "4/5  Plak het Clientgeheim van Google (begint meestal met GOCSPX-):" GSECRET hidden
@@ -43,7 +46,7 @@ umask 077
 cat > "$ENV_FILE" <<ENV
 PGHOST=$PGHOST
 PGPORT=$PGPORT
-PGUSER=atlas
+PGUSER=$PGUSER_IN
 PGPASSWORD=$PGPASSWORD
 PGDATABASE=rdb
 

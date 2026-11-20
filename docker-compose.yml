@@ -7,6 +7,13 @@ services:
     env_file: .env
     ports:
       - "127.0.0.1:3000:3000"
+  # Achtergrondproces: Gmail, Agenda, WeFact en de dagelijkse controle.
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    command: ["npx", "tsx", "src/worker/index.ts"]
+    depends_on: [web]
   # Caddy regelt HTTPS (Let's Encrypt) automatisch.
   caddy:
     image: caddy:2-alpine

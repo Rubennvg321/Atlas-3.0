@@ -22,6 +22,10 @@ import { parseEuro } from "@/lib/finance";
 import { setManualFinance } from "@/server/finance";
 import { addManualPurchase, deletePurchase, linkPurchase } from "@/server/purchases";
 import { decideProposal } from "@/server/automation";
+import { liveWefact } from "@/server/integrations/wefact-client";
+import { cfg, friendlyError, getIntegration, upsertIntegration, type Provider } from "@/server/integrations/state";
+import { encrypt } from "@/server/crypto";
+import { audit } from "@/server/timeline";
 
 export type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string; conflict?: boolean };
 
@@ -433,4 +437,52 @@ export async function decideProposalAction(proposalId: string, accept: boolean, 
   revalidatePath(`/trajecten/${trajectId}`);
   revalidatePath("/bord");
   return res.ok ? { ok: true } : res;
+}
+
+// ---------------------------------------------------------------------------
+// Koppelingen
+// ---------------------------------------------------------------------------
+
+export async function saveWefactKeyAction(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  const user = await requireUser();
+  const key = str(fd, "apiKey");
+  if (!key) return { ok: false, error: "Vul de API-sleutel in." };
+  try {
+    await liveWefact(key).listQuotes(0, 1);
+  } catch (e) {
+    return { ok: false, error: friendlyError(e) };
+  }
+  await upsertIntegration(getDb(), "wefact", { encryptedTokens: encrypt(key), status: "gekoppeld", lastError: null, config: { nextRunAt: new Date().toISOString() } });
+  await audit(getDb(), user.id, "wefact_connect", "integration", "wefact");
+  revalidatePath("/koppelingen");
+  return { ok: true };
+}
+
+export async function retrySyncAction(provider: string) {
+  await requireUser();
+  const p = provider as Provider;
+  if (!["gmail", "google_calendar", "wefact", "dagelijks"].includes(p)) return;
+  const row = await getIntegration(getDb(), p);
+  await upsertIntegration(getDb(), p, { config: { ...cfg(row), nextRunAt: new Date().toISOString(), failures: 0 } });
+  revalidatePath("/koppelingen");
+}
+
+export async function disconnectAction(provider: "google" | "wefact") {
+  const user = await requireUser();
+  await upsertIntegration(getDb(), provider, { encryptedTokens: null, status: "niet_gekoppeld", account: null });
+  if (provider === "google") for (const p of ["gmail", "google_calendar"] as const) await upsertIntegration(getDb(), p, { status: "niet_gekoppeld" });
+  await audit(getDb(), user.id, "disconnect", "integration", provider);
+  revalidatePath("/koppelingen");
+}
+
+export async function saveReviewSettingsAction(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  const user = await requireUser();
+  const link = str(fd, "link");
+  if (link && !/^https:\/\//.test(link)) return { ok: false, error: "De reviewlink moet met https:// beginnen." };
+  const enabled = fd.get("enabled") === "on";
+  if (enabled && !link) return { ok: false, error: "Vul eerst de reviewlink in." };
+  const v = (k: string) => (typeof fd.get(k) === "string" ? String(fd.get(k)) : "");
+  await setSetting(getDb(), "reviews", { enabled, link: link ?? "", subject: v("subject"), body: v("body"), reminderSubject: v("reminderSubject"), reminderBody: v("reminderBody") }, user.id);
+  revalidatePath("/koppelingen");
+  return { ok: true };
 }

@@ -7,8 +7,8 @@ Klant- en projectbeheer voor Steps & Stairs: van eerste aanvraag tot afgeronde m
 | Fase | Inhoud | Status |
 |---|---|---|
 | 1 | Datamodel, login, klanten, trajecten, Kanban-bord, taken, herkenning en ontdubbeling, import | **Klaar** |
-| 2 | Gmail (aanvraagmails → lead, mail bij traject) en Google Agenda | Gepland |
-| 3 | WeFact (offertes, debiteuren, status) | Gepland |
+| 2 | Gmail (aanvragen, orderbevestigingen, geaccepteerde offertes, klantmail) en Google Agenda | **Klaar** (activeren via Koppelingen) |
+| 3 | WeFact (offertes, debiteuren, status, verkoop excl. btw) | **Klaar** (activeren via Koppelingen) |
 | 4 | Dashboard en rapportages | Gepland |
 | 5 | Google Business-reviews | Gepland |
 

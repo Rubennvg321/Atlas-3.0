@@ -15,7 +15,7 @@ const ITEMS = [
 export function Nav({ duplicateCount, overdueCount }: { duplicateCount: number; overdueCount: number }) {
   const path = usePathname();
   const active = (href: string) =>
-    path === href || path.startsWith(href + "/") || (href === "/meer" && ["/import", "/instellingen", "/meer"].some((p) => path.startsWith(p)));
+    path === href || path.startsWith(href + "/") || (href === "/meer" && ["/import", "/instellingen", "/meer", "/koppelingen"].some((p) => path.startsWith(p)));
   const badge = (href: string) => (href === "/dubbels" ? duplicateCount : href === "/taken" ? overdueCount : 0);
   return (
     <>
@@ -25,7 +25,7 @@ export function Nav({ duplicateCount, overdueCount }: { duplicateCount: number; 
             <img src="/icon.svg" alt="" className="h-7 w-7" /> Atlas
           </Link>
           <nav className="flex gap-1">
-            {[...ITEMS.slice(0, 4), { href: "/import", label: "Import", icon: "" }, { href: "/instellingen", label: "Instellingen", icon: "" }].map((i) => (
+            {[...ITEMS.slice(0, 4), { href: "/koppelingen", label: "Koppelingen", icon: "" }, { href: "/import", label: "Import", icon: "" }, { href: "/instellingen", label: "Instellingen", icon: "" }].map((i) => (
               <Link
                 key={i.href}
                 href={i.href}

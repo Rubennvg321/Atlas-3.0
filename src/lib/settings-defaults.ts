@@ -5,6 +5,24 @@ export const DEFAULT_SETTINGS = {
   /** Herkenning van aanvraagmails (fase 2). */
   intakeFilters: {
     rules: [{ from: "info@stepsandstairs.nl", subjectContains: "Aanvraag website", parser: "website-form" }],
+    /** Label voor verwerkte aanvragen; de mail wordt daarna gearchiveerd. */
+    processedLabel: "Atlas/Lead",
+    unrecognizedLabel: "Atlas/Niet herkend",
+    /** Bij de eerste koppeling: aanvragen van de afgelopen zoveel dagen ophalen. */
+    lookbackDays: 7,
+  },
+  /** Mails van WeFact over geaccepteerde offertes. */
+  wefactMail: { from: "mijnwefact.nl", subjectContains: "online geaccepteerd" },
+  /** Reviewverzoeken (worden pas verstuurd als ze aan staan en er een link is). */
+  reviews: {
+    enabled: false,
+    link: "",
+    subject: "Hoe tevreden bent u over uw nieuwe trap?",
+    body:
+      "Beste {naam},\n\nVorige week hebben wij uw trap gerenoveerd. We hopen dat u er net zo blij mee bent als wij!\n\nZou u ons willen helpen door een korte review te schrijven? Dat kost maar een minuutje:\n{link}\n\nAlvast hartelijk dank.\n\nMet vriendelijke groet,\nSteps & Stairs",
+    reminderSubject: "Herinnering: uw ervaring met Steps & Stairs",
+    reminderBody:
+      "Beste {naam},\n\nOnlangs vroegen we u om een review over de renovatie van uw trap. Mocht u daar nog niet aan toegekomen zijn: we zouden het erg waarderen.\n{link}\n\nMet vriendelijke groet,\nSteps & Stairs",
   },
   /** Agenda-herkenning (fase 2): Google Agenda kleur-id's. 5 = geel (Banana), 11 = rood (Tomato). */
   calendarRules: {

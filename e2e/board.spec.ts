@@ -42,45 +42,45 @@ test("slepen en dropdown geven hetzelfde resultaat, ook na verversen en op een t
   await expect(column(a, "lead").getByText("Jan van der Berg")).toBeVisible();
 
   // Apparaat A: slepen Lead -> Afspraak
-  await saved(a, () => drag(a, "Jan van der Berg", "afspraak"));
-  await expect(column(a, "afspraak").getByText("Jan van der Berg")).toBeVisible();
+  await saved(a, () => drag(a, "Jan van der Berg", "offerte_gepland"));
+  await expect(column(a, "offerte_gepland").getByText("Jan van der Berg")).toBeVisible();
   await a.reload();
-  await expect(column(a, "afspraak").getByText("Jan van der Berg")).toBeVisible();
+  await expect(column(a, "offerte_gepland").getByText("Jan van der Berg")).toBeVisible();
 
   // Apparaat B ziet hetzelfde na verversen; dropdown staat op dezelfde fase
   await b.reload();
-  await expect(column(b, "afspraak").getByText("Jan van der Berg")).toBeVisible();
-  await expect(card(b, "Jan van der Berg").getByLabel("Fase")).toHaveValue("afspraak");
+  await expect(column(b, "offerte_gepland").getByText("Jan van der Berg")).toBeVisible();
+  await expect(card(b, "Jan van der Berg").getByLabel("Fase")).toHaveValue("offerte_gepland");
 
   // Apparaat B: dropdown -> Offerte
-  await saved(b, () => card(b, "Jan van der Berg").getByLabel("Fase").selectOption("offerte"));
-  await expect(column(b, "offerte").getByText("Jan van der Berg")).toBeVisible();
+  await saved(b, () => card(b, "Jan van der Berg").getByLabel("Fase").selectOption("offerte_gemaakt"));
+  await expect(column(b, "offerte_gemaakt").getByText("Jan van der Berg")).toBeVisible();
 
   // Apparaat A pakt het op (bij focus/periodiek verversen); hier: herladen
   await a.reload();
-  await expect(column(a, "offerte").getByText("Jan van der Berg")).toBeVisible();
-  await expect(card(a, "Jan van der Berg").getByLabel("Fase")).toHaveValue("offerte");
+  await expect(column(a, "offerte_gemaakt").getByText("Jan van der Berg")).toBeVisible();
+  await expect(card(a, "Jan van der Berg").getByLabel("Fase")).toHaveValue("offerte_gemaakt");
 
   // Detailpagina toont dezelfde fase en het logboek
   await card(a, "Jan van der Berg").getByRole("link", { name: "Jan van der Berg" }).click();
   await a.waitForURL("**/trajecten/**");
-  await expect(a.getByLabel("Fase")).toHaveValue("offerte");
-  await expect(a.getByText("Fase: Afspraak → Offerte")).toBeVisible();
-  await expect(a.getByText("Fase: Lead → Afspraak")).toBeVisible();
+  await expect(a.getByLabel("Fase")).toHaveValue("offerte_gemaakt");
+  await expect(a.getByText("Fase: Offerte gepland → Offerte gemaakt")).toBeVisible();
+  await expect(a.getByText("Fase: Lead → Offerte gepland")).toBeVisible();
 });
 
 test("verouderd scherm op tweede apparaat overschrijft niets", async ({ browser }) => {
   const a = await newDevice(browser);
   const b = await newDevice(browser);
   // B wijzigt eerst
-  await saved(b, () => card(b, "Sanne Bakker").getByLabel("Fase").selectOption("afspraak"));
-  await expect(column(b, "afspraak").getByText("Sanne Bakker")).toBeVisible();
+  await saved(b, () => card(b, "Sanne Bakker").getByLabel("Fase").selectOption("offerte_gepland"));
+  await expect(column(b, "offerte_gepland").getByText("Sanne Bakker")).toBeVisible();
   // A heeft nog het oude scherm en probeert iets anders
-  await card(a, "Sanne Bakker").getByLabel("Fase").selectOption("offerte");
+  await card(a, "Sanne Bakker").getByLabel("Fase").selectOption("offerte_gemaakt");
   await expect(a.getByText("ondertussen gewijzigd")).toBeVisible();
   // na verversen staat de kaart op de fase van B
   await a.reload();
-  await expect(column(a, "afspraak").getByText("Sanne Bakker")).toBeVisible();
+  await expect(column(a, "offerte_gepland").getByText("Sanne Bakker")).toBeVisible();
 });
 
 test("vervallen vraagt om een reden", async ({ page }) => {

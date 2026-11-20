@@ -15,6 +15,20 @@
       "when": 1794947193184,
       "tag": "0001_search_extensions",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795189948973,
+      "tag": "0002_nieuwe_fases",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795189966218,
+      "tag": "0003_financieel",
+      "breakpoints": true
     }
   ]
 }

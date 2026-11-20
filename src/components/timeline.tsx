@@ -8,6 +8,8 @@ const ICONS: Record<string, string> = {
   taak: "✓",
   afspraak: "📅",
   offerte: "€",
+  inkoop: "🛒",
+  financieel: "€",
   samengevoegd: "⧉",
   samenvoeging_ongedaan: "↺",
   traject_aangemaakt: "★",

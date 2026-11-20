@@ -10,10 +10,10 @@ beforeEach(resetDb);
 afterAll(closeDb);
 
 const CSV = `Naam;E-mail;Telefoon;Adres;Postcode;Plaats;Fase
-Peter Jansen;p.jansen@ziggo.nl;06-12345678;Kerkstraat 12;6511 AB;Nijmegen;Afgerond
+Peter Jansen;p.jansen@ziggo.nl;06-12345678;Kerkstraat 12;6511 AB;Nijmegen;Review ontvangen
 P. Janssen;;+31 6 12345678;Kerkstraat 12;6511AB;Nijmegen;
 Sanne Bakker;sanne@hotmail.com;0687654321;Kerkstraat 12;6511AB;Nijmegen;
-Jan van der Berg;jan@vdberg.nl;024-3456789;Dorpsstraat 3a;1234 ab;Elst;Afgerond
+Jan van der Berg;jan@vdberg.nl;024-3456789;Dorpsstraat 3a;1234 ab;Elst;Review ontvangen
 ;;;;;;
 Kees Onbekend;;;;;;Bestaatniet
 `;
@@ -32,7 +32,7 @@ describe("import van bestaande klanten", () => {
     const active = await db().select().from(customers).where(isNull(customers.mergedIntoId));
     expect(active).toHaveLength(3); // Jansen, Bakker (mogelijk dubbel), van der Berg
     const tr = await db().select().from(trajects);
-    expect(tr.map((t) => t.stage).sort()).toEqual(["afgerond", "afgerond"]);
+    expect(tr.map((t) => t.stage).sort()).toEqual(["review_ontvangen", "review_ontvangen"]);
     // nog een keer importeren verandert niets
     const again = await commitImport(db(), CSV, null);
     expect(again.counts.overgeslagen).toBe(4);

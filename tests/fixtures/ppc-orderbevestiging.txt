@@ -1,0 +1,61 @@
+SC_ItemNo SCL_Comment
+Customer_Addr1                                                            SellToCountry ItemCertificate
+
+
+
+
+                                                                                                         PPC Hoofdkantoor      Weegmaat 3, Wijk bij Duurstede
+                                                                                                         Postadres             Postbus 74, 3960 BB Wijk bij Duurstede
+                                                                                                         PPC Amsterdam         H.J.E. Wenckebachweg 131, 1096 AM Amsterdam
+                                                                                                         PPC Den Haag          Singel 77, 2497 GS Den Haag
+                                                                                                         PPC Eindhoven         Lodewijkstraat 50, 5652 AC Eindhoven
+                                                                                                         PPC Groningen         Hooghoudtstraat 4, 9723 TG Groningen
+                                                                                                         PPC Nieuwegein        Veldwade 8, 3439 LE Nieuwegein
+                                                                                                         PPC Zwijndrecht       Wattstraat 90, 3335 LV Zwijndrecht
+
+
+              Steps&Stairs                                                                               Afleveradres
+              De heer R. Test                                                                Stairscompany
+              Waemelslant 139                                                                            De heer R. Test
+              6931HV Westervoort                                                                         Waemelslant 139
+              Nederland                                                                                  6931HV Westervoort
+                                                                                                         Nederland
+
+
+ Orderbevestiging                                                                           Verzenddatum                                                04-02-2027
+
+
+Ordernr.                     26510197                                                      Commissie                   Fam. Voorbeeld
+Orderdatum                   18-11-2026                                                    Verzendconditie             levering via chauffeur aan magazijn/winkel
+Klantnr.                     10973                                                         Betalingscondities          Wordt automatisch afgeschreven op 4 dagen
+
+
+
+Artikel        Omschrijving                                                     Aantal     Per                                           Prijs         Korting           Bedrag
+84007          Soudal Silirub Color Siliconenkit RAL 1019 300ml                       3    KOKER                                         8,95                             26,85
+               Let op, dit betreft een artikel met afwijkende retourvoorwaarden
+73419          Dubbeltreden Orleans Eik Zand 121x61cm                               14     STUK                                         97,79              12           1.204,77
+73420          Dubbeltreden Orleans Eik Zand 136x61cm                                 2    STUK                                       109,30               12            192,37
+73445          Dubbel stootbord Orleans Eik Zand 136x40cm                           20     STUK                                         19,09              12            335,98
+73451          U-kap Orleans Eik Zand 69/10mm                                         7    3,05 MTR                                     25,31              12            155,91
+73458          Laminaat Orleans Eik Zand 7,4x185x1184mm                               3    1,75 M2                                    101,99               12            269,25
+73460          Uitlooptrede Orleans Eik Zand 121x12,5cm                               1    STUK                                         69,04              12             60,76
+               Let op, dit betreft een artikel met afwijkende retourvoorwaarden
+23176          Plakplint folie 24x5mm decor 176 2,4m                                  5    2,4 MTR                                       1,98                               9,90
+15952          MDF Moderne plint 90x15 voorgelakt RAL 9016                            4    2,4 MTR                                       7,58                             30,32
+               FSC Mix 70%
+41355          Dilatatieprofiel zelfklevend RVS 2,8x37mm 3m                           2    3 MTR                                        15,79                             31,58
+86106          Allround ondervloer laminaat/parket 2 mm 15m2                          1    15 M2                                        26,85                             26,85
+
+
+
+
+                        Subtotaal                                             Totaal EUR excl. BTW                            BTW 21%                   Totaal EUR incl. BTW
+                         2.344,54                                                         2.344,54                              492,35                              2.836,89
+
+                            Alleen als zodanig gemarkeerde producten zijn FSC of PEFC gecertificeerd. FSC: PBN-COC-059872 PEFC: PBN-PEFC-COC-059872.
+
+Tel.   0343 - 432 321    Email info@plintenenprofielencentrale.nl   Website www.plintenenprofielencentrale.nl   IBAN NL03INGB0677098960          BTW NR.         NL811924178B01
+
+Op alle werkzaamheden van PPC zijn de algemene voorwaarden, gedeponeerd bij de Kamer van Koophandel te Utrecht onder nummer 30185638, van toepassing.
+

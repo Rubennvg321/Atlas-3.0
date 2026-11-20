@@ -9,6 +9,7 @@ import {
   duplicateCandidates,
   notes,
   pipelineStages,
+  purchaseOrders,
   quotes,
   stageChanges,
   tasks,
@@ -17,6 +18,7 @@ import {
   users,
 } from "@/db/schema";
 import { normalizePhone, normalizePostcode } from "@/lib/normalize";
+import { calcFinance } from "@/lib/finance";
 
 /** Zoekconditie op klant: naam, plaats, postcode, e-mail, telefoon, offertenummer. */
 export function customerSearchCondition(q: string): SQL | undefined {
@@ -52,8 +54,11 @@ export interface BoardCard {
   customerId: string;
   name: string;
   city: string | null;
-  quoteAmount: string | null;
+  saleExcl: string | null;
   quoteNumber: string | null;
+  purchaseExcl: string | null;
+  montageDays: number | null;
+  marginPerDay: number | null;
   nextAppointmentAt: Date | null;
   nextAppointmentTitle: string | null;
   nextTaskTitle: string | null;
@@ -86,8 +91,17 @@ export async function getBoard(db: DbOrTx, opts: { q?: string; showLost?: boolea
       city: sql<string | null>`coalesce(${trajects.siteCity}, ${customers.city})`,
       stageChangedAt: trajects.stageChangedAt,
       lostReason: trajects.lostReason,
-      quoteAmount: sql<string | null>`(select q.amount_incl::text from ${quotes} q where q.traject_id = ${trajects.id} and q.deleted_at is null order by q.quote_date desc nulls last, q.created_at desc limit 1)`,
-      quoteNumber: sql<string | null>`(select q.number from ${quotes} q where q.traject_id = ${trajects.id} and q.deleted_at is null order by q.quote_date desc nulls last, q.created_at desc limit 1)`,
+      saleExcl: sql<string | null>`coalesce(
+        (select q.amount_excl::text from ${quotes} q where q.traject_id = ${trajects.id} and q.deleted_at is null and q.amount_excl is not null
+          order by (q.status = 'geaccepteerd') desc, q.quote_date desc nulls last, q.created_at desc limit 1),
+        ${trajects.saleAmountExclManual}::text)`,
+      quoteNumber: sql<string | null>`(select q.number from ${quotes} q where q.traject_id = ${trajects.id} and q.deleted_at is null order by (q.status = 'geaccepteerd') desc, q.quote_date desc nulls last, q.created_at desc limit 1)`,
+      purchaseExcl: sql<string | null>`(select sum(p.amount_excl)::text from ${purchaseOrders} p where p.traject_id = ${trajects.id} and p.deleted_at is null)`,
+      montageDays: sql<number | null>`coalesce(${trajects.montageDaysManual}, (
+        select nullif(count(distinct d), 0)::int from ${appointments} a,
+          generate_series((a.starts_at at time zone 'Europe/Amsterdam')::date,
+                          ((a.ends_at - interval '1 second') at time zone 'Europe/Amsterdam')::date, interval '1 day') d
+        where a.traject_id = ${trajects.id} and a.kind = 'montage' and a.status = 'gepland' and a.deleted_at is null))`,
       nextAppointmentAt: sql<Date | null>`(select a.starts_at from ${appointments} a where a.traject_id = ${trajects.id} and a.deleted_at is null and a.status = 'gepland' and a.ends_at >= now() order by a.starts_at limit 1)`,
       nextAppointmentTitle: sql<string | null>`(select a.title from ${appointments} a where a.traject_id = ${trajects.id} and a.deleted_at is null and a.status = 'gepland' and a.ends_at >= now() order by a.starts_at limit 1)`,
       nextTaskTitle: sql<string | null>`(select t.title from ${tasks} t where t.traject_id = ${trajects.id} and t.deleted_at is null and t.done_at is null order by t.due_at asc nulls last, t.created_at limit 1)`,
@@ -103,6 +117,11 @@ export async function getBoard(db: DbOrTx, opts: { q?: string; showLost?: boolea
 
   const cards: BoardCard[] = rows.map((r) => ({
     ...r,
+    marginPerDay: calcFinance({
+      saleExcl: r.saleExcl === null ? null : Number(r.saleExcl),
+      purchaseExcl: r.purchaseExcl === null ? null : Number(r.purchaseExcl),
+      montageDays: r.montageDays,
+    }).marginPerDay,
     nextAppointmentAt: r.nextAppointmentAt ? new Date(r.nextAppointmentAt) : null,
     nextTaskDueAt: r.nextTaskDueAt ? new Date(r.nextTaskDueAt) : null,
     stageChangedAt: new Date(r.stageChangedAt),
@@ -260,4 +279,16 @@ export async function trajectsWithoutAction(db: DbOrTx) {
       ),
     )
     .orderBy(asc(trajects.stageChangedAt));
+}
+
+/** Keuzelijst van lopende trajecten (bv. om een inkooporder te koppelen). */
+export async function openTrajectOptions(db: DbOrTx) {
+  const rows = await db
+    .select({ id: trajects.id, number: trajects.number, stage: pipelineStages.label, name: customers.displayName, city: customers.city })
+    .from(trajects)
+    .innerJoin(customers, eq(customers.id, trajects.customerId))
+    .innerJoin(pipelineStages, eq(pipelineStages.key, trajects.stage))
+    .where(and(isNull(trajects.deletedAt), inArray(pipelineStages.kind, ["open", "won"])))
+    .orderBy(asc(customers.displayName));
+  return rows.map((t) => ({ id: t.id, label: `${t.name}${t.city ? `, ${t.city}` : ""} · #${t.number} · ${t.stage}` }));
 }

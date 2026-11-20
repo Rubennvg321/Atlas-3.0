@@ -1,28 +1,23 @@
-# Wensen voor de volgende ronde (doorgegeven 18-11-2026)
+# Fases en automatische regels (vastgelegd 20-11-2026)
 
-## 1. Fases aanpassen naar de huidige kaartenbak
-Huidige kaartenbak (volgorde zoals nu in gebruik):
+| Fase | Wanneer | Status |
+|---|---|---|
+| In afwachting | Klant gebeld, nog geen concrete afspraak (handmatig) | Klaar |
+| Lead | Mail "Aanvraag website" → automatisch lead, mail archiveren + label | Fase klaar; Gmail-koppeling volgt |
+| Offerte gepland | Gele afspraak "Advies gesprek Steps&Stairs" (adres in locatie, mail als gast) | Herkenning klaar; Agenda-koppeling volgt |
+| Offerte gemaakt | Offerte in WeFact | Regel klaar; WeFact-koppeling volgt |
+| Offerte geaccepteerd | Mail "Offerte … is online geaccepteerd" (WeFact) | Herkenning + koppeling klaar; Gmail volgt |
+| Montage gepland | Rode afspraak "Fam. Naam + adres" | Herkenning klaar; Agenda volgt |
+| Materiaal besteld | Orderbevestiging PPC (PDF) of fedi (mail), gekoppeld via "Commissie" | Herkenning + koppeling klaar; Gmail volgt |
+| In uitvoering | Vandaag tussen eerste en laatste montagedag | Regel klaar; dagelijkse taak volgt |
+| Review gestuurd | Uitnodiging 2 dagen na laatste montagedag; herinnering na 7 dagen | Regels klaar; versturen volgt |
+| Review ontvangen | Klant heeft review geplaatst | Handmatig; automatisch via Google Business later |
+| Vervallen | Archief, met reden | Klaar |
 
-1. In afwachting
-2. Lead
-3. Offerte gepland
-4. Offerte gemaakt
-5. Montage gepland
-6. Materiaal besteld
-7. In uitvoering
-8. Review
-9. Review ontvangen
+Kaarten gaan automatisch alleen vooruit (nooit terug, nooit uit Vervallen). Per regel instelbaar:
+automatisch of als voorstel.
 
-Open punten: blijft "Vervallen" (met reden) als archief bestaan? Wat betekent "In afwachting" precies
-(vóór Lead?). Automatische regels opnieuw koppelen: gele agenda-afspraak → "Offerte gepland",
-offerte in WeFact → "Offerte gemaakt", geaccepteerd → "Montage gepland"?, orderbevestiging
-leverancier → "Materiaal besteld"?, rode montage-afspraak → "In uitvoering"?
-
-## 2. Verkoopwaarde en inkoopwaarde op de klantkaart
-- **Verkoopwaarde**: offertebedrag **exclusief btw** uit WeFact (WeFact leidend).
-- **Inkoopwaarde**: uit orderbevestigingen in Gmail van leveranciers:
-  - PPC (info@plintenenprofielencentrale.nl) — orderbevestiging als PDF-bijlage, onderwerp "PPC Orderbevestiging <nummer>".
-  - fedi (Gelsenkirchen) — orderbevestiging in de mailtekst (tabel met artikelen + "Totaal"),
-    met in "Extra informatie" de commissie, bijv. "Comissie: Fam. Huissteden" → koppeling aan klant/traject.
-- Voorbeelden ontvangen: Factuur F2026-0068 (PDF), PPC Orderbevestiging 26510197 (PDF), screenshot fedi BE12558.
-- Op de kaart: verkoop excl. btw, inkoop, en daarmee de marge.
+## Financieel (klaar)
+- Verkoop excl. btw: WeFact-offerte leidend, tot die tijd handmatig.
+- Inkoop excl. btw: som van inkooporders (PPC/fedi uit Gmail, of handmatig).
+- Marge, marge %, montagedagen (uit rode afspraken of handmatig) en marge per dag, op kaart en detail.

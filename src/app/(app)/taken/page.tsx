@@ -1,16 +1,19 @@
 import Link from "next/link";
 import { getDb } from "@/db";
-import { getMyTasks, trajectsWithoutAction } from "@/server/queries";
+import { getMyTasks, openTrajectOptions, trajectsWithoutAction } from "@/server/queries";
 import { getStages } from "@/server/trajects";
 import { Card, PageHeader } from "@/components/server-ui";
 import { TaskItem } from "@/components/traject-client";
-import { isoDay } from "@/lib/format";
+import { euro, isoDay } from "@/lib/format";
+import { unlinkedPurchases } from "@/server/purchases";
+import { LinkPurchaseForm } from "@/components/link-purchase";
 
 export const metadata = { title: "Taken" };
 
 export default async function TasksPage() {
   const db = getDb();
-  const [rows, idle, stages] = await Promise.all([getMyTasks(db), trajectsWithoutAction(db), getStages(db)]);
+  const [rows, idle, stages, unlinked] = await Promise.all([getMyTasks(db), trajectsWithoutAction(db), getStages(db), unlinkedPurchases(db)]);
+  const allOpen = await openTrajectOptions(db);
   const today = isoDay(new Date());
   const weekEnd = isoDay(new Date(Date.now() + 7 * 86400000));
   const groups = {
@@ -23,6 +26,23 @@ export default async function TasksPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <PageHeader title="Taken" />
+      {unlinked.length > 0 && (
+        <Card title={`Inkoop te koppelen (${unlinked.length})`} className="border-orange-200">
+          <p className="mb-2 text-xs text-stone-500">Atlas kon deze orderbevestigingen niet met zekerheid aan één traject koppelen.</p>
+          <ul className="space-y-3">
+            {unlinked.map((p) => (
+              <li key={p.id} className="text-sm">
+                <p>
+                  <strong>{p.supplier}</strong>
+                  {p.orderNumber ? ` ${p.orderNumber}` : ""} · {euro(p.amountExcl)} excl. btw
+                  {p.commission ? <span className="text-stone-500"> · Commissie: {p.commission}</span> : null}
+                </p>
+                <LinkPurchaseForm purchaseId={p.id} options={allOpen} />
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       {Object.entries(groups).map(([label, items]) =>
         items.length || label === "Vandaag" ? (
           <Card key={label} title={`${label} (${items.length})`} className={label === "Te laat" ? "border-red-200" : ""}>

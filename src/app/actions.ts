@@ -17,6 +17,11 @@ import { setSetting } from "@/server/settings";
 import { duplicateCandidates, pipelineStages } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { normalizeAddition, normalizePostcode, tidyCity } from "@/lib/normalize";
+import { EVENT_TARGET } from "@/lib/stage-rules";
+import { parseEuro } from "@/lib/finance";
+import { setManualFinance } from "@/server/finance";
+import { addManualPurchase, deletePurchase, linkPurchase } from "@/server/purchases";
+import { decideProposal } from "@/server/automation";
 
 export type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string; conflict?: boolean };
 
@@ -349,7 +354,7 @@ export async function saveStagesAction(_prev: ActionResult | null, fd: FormData)
   await requireUser();
   return run(async () => {
     const db = getDb();
-    const stages = await db.select().from(pipelineStages);
+    const stages = await db.select().from(pipelineStages).where(eq(pipelineStages.active, true));
     for (const s of stages) {
       const label = str(fd, `label_${s.key}`);
       const position = int(fd, `position_${s.key}`);
@@ -364,13 +369,68 @@ export async function saveStagesAction(_prev: ActionResult | null, fd: FormData)
 export async function saveAutomationAction(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {
   const user = await requireUser();
   return run(async () => {
-    const mode = (k: string) => (str(fd, k) === "automatic" ? "automatic" : "proposal");
-    await setSetting(
-      getDb(),
-      "automation",
-      { appointmentToAfspraak: mode("appointmentToAfspraak"), quoteAcceptedToOpdracht: mode("quoteAcceptedToOpdracht") },
-      user.id,
-    );
+    const value: Record<string, "automatic" | "proposal"> = {};
+    for (const key of Object.keys(EVENT_TARGET)) value[key] = str(fd, key) === "automatic" ? "automatic" : "proposal";
+    await setSetting(getDb(), "automation", value, user.id);
     revalidatePath("/instellingen");
   });
+}
+
+// ---------------------------------------------------------------------------
+// Financieel, inkoop en voorstellen
+// ---------------------------------------------------------------------------
+
+function euroInput(v: string | null): number | null {
+  if (!v) return null;
+  const n = parseEuro(v);
+  if (n === null) throw new DomainError(`Ongeldig bedrag: ${v}`);
+  return n;
+}
+
+export async function saveFinanceAction(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  const user = await requireUser();
+  const trajectId = str(fd, "trajectId")!;
+  const res = await run(async () => {
+    const days = int(fd, "montageDays");
+    await setManualFinance(getDb(), trajectId, { saleAmountExcl: euroInput(str(fd, "saleAmountExcl")), montageDays: days }, user.id);
+  });
+  revalidatePath(`/trajecten/${trajectId}`);
+  revalidatePath("/bord");
+  return res.ok ? { ok: true } : res;
+}
+
+export async function addPurchaseAction(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  const user = await requireUser();
+  const trajectId = str(fd, "trajectId")!;
+  const res = await run(async () => {
+    const amount = euroInput(str(fd, "amountExcl"));
+    if (amount === null) throw new DomainError("Vul een bedrag excl. btw in.");
+    await addManualPurchase(getDb(), { trajectId, supplier: str(fd, "supplier") ?? "", orderNumber: str(fd, "orderNumber"), amountExcl: amount, userId: user.id });
+  });
+  revalidatePath(`/trajecten/${trajectId}`);
+  revalidatePath("/bord");
+  return res.ok ? { ok: true } : res;
+}
+
+export async function deletePurchaseAction(purchaseId: string, trajectId: string) {
+  await requireUser();
+  await deletePurchase(getDb(), purchaseId);
+  revalidatePath(`/trajecten/${trajectId}`);
+  revalidatePath("/bord");
+}
+
+export async function linkPurchaseAction(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  const user = await requireUser();
+  const res = await run(() => linkPurchase(getDb(), str(fd, "purchaseId")!, str(fd, "trajectId") ?? "", user.id));
+  revalidatePath("/taken");
+  revalidatePath("/bord");
+  return res.ok ? { ok: true } : res;
+}
+
+export async function decideProposalAction(proposalId: string, accept: boolean, trajectId: string): Promise<ActionResult> {
+  const user = await requireUser();
+  const res = await run(() => decideProposal(getDb(), proposalId, accept, user.id));
+  revalidatePath(`/trajecten/${trajectId}`);
+  revalidatePath("/bord");
+  return res.ok ? { ok: true } : res;
 }

@@ -52,3 +52,10 @@ export function relativeDays(d: Date | string, now = new Date()): string {
   if (diff < 0) return `${-diff} dagen te laat`;
   return `over ${diff} dagen`;
 }
+
+/** Bedrag met centen, voor het financiële overzicht. */
+export function euroCents(v: string | number | null | undefined): string {
+  if (v === null || v === undefined || v === "") return "";
+  const n = typeof v === "string" ? Number(v) : v;
+  return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+}

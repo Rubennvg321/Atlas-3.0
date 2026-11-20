@@ -29,8 +29,11 @@ export interface CardData {
   customerId: string;
   name: string;
   city: string | null;
-  quoteAmount: string | null;
+  saleExcl: string | null;
   quoteNumber: string | null;
+  purchaseExcl: string | null;
+  montageDays: number | null;
+  marginPerDay: number | null;
   nextAppointmentAt: string | null;
   nextAppointmentTitle: string | null;
   nextTaskTitle: string | null;
@@ -52,6 +55,9 @@ const COLUMN_ACCENT: Record<string, string> = {
   rose: "border-t-rose-400",
   slate: "border-t-slate-400",
   zinc: "border-t-zinc-400",
+  orange: "border-t-orange-400",
+  teal: "border-t-teal-500",
+  indigo: "border-t-indigo-400",
 };
 
 const REFRESH_MS = 15000;
@@ -199,13 +205,13 @@ function BoardColumn({
   onRequestLost: (card: CardData) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.key });
-  const total = cards.reduce((s, c) => s + (c.quoteAmount ? Number(c.quoteAmount) : 0), 0);
+  const total = cards.reduce((s, c) => s + (c.saleExcl ? Number(c.saleExcl) : 0), 0);
   return (
     <div
       ref={setNodeRef}
       data-stage={column.key}
       className={clsx(
-        "flex w-[85vw] max-w-[320px] shrink-0 snap-start flex-col rounded-xl border-t-4 bg-stone-200/60 sm:w-72",
+        "flex w-[85vw] max-w-[320px] shrink-0 snap-start flex-col rounded-xl border-t-4 bg-stone-200/60 sm:w-64",
         COLUMN_ACCENT[column.color] ?? "border-t-slate-400",
         isOver && "ring-2 ring-stone-500",
       )}
@@ -214,7 +220,7 @@ function BoardColumn({
         <h2 className="text-sm font-semibold">
           {column.label} <span className="font-normal text-stone-500">{cards.length}</span>
         </h2>
-        {total > 0 && <span className="text-xs text-stone-500">{euro(total)}</span>}
+        {total > 0 && <span className="text-xs text-stone-500" title="Verkoopwaarde excl. btw">{euro(total)}</span>}
       </div>
       <div className="flex min-h-24 flex-1 flex-col gap-2 px-2 pb-2">
         {cards.map((c) => (
@@ -253,7 +259,11 @@ function CardView({ card, allStages, onMove, overlay }: { card: CardData; allSta
         <Link href={`/trajecten/${card.id}`} className="font-medium leading-tight hover:underline" onPointerDown={(e) => e.stopPropagation()}>
           {card.name}
         </Link>
-        {card.quoteAmount && <span className="shrink-0 font-medium text-stone-700">{euro(card.quoteAmount)}</span>}
+        {card.saleExcl && (
+          <span className="shrink-0 font-medium text-stone-700" title="Verkoop excl. btw">
+            {euro(card.saleExcl)}
+          </span>
+        )}
       </div>
       <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-stone-500">
         <span>{card.city ?? "Plaats onbekend"}</span>
@@ -261,6 +271,16 @@ function CardView({ card, allStages, onMove, overlay }: { card: CardData; allSta
         {card.quoteNumber && <span>· {card.quoteNumber}</span>}
         {card.hasDuplicate && <span className="rounded bg-red-100 px-1.5 py-0.5 font-medium text-red-700">Mogelijk dubbel</span>}
       </div>
+      {(card.purchaseExcl || card.marginPerDay !== null) && (
+        <p className="mt-1.5 flex flex-wrap gap-x-3 text-xs text-stone-600">
+          {card.purchaseExcl && <span title="Inkoop excl. btw">Inkoop {euro(card.purchaseExcl)}</span>}
+          {card.marginPerDay !== null && (
+            <span className={clsx("font-medium", card.marginPerDay >= 0 ? "text-emerald-700" : "text-red-700")} title={`Marge per montagedag (${card.montageDays} dag(en))`}>
+              {euro(card.marginPerDay)}/dag
+            </span>
+          )}
+        </p>
+      )}
       {card.nextAppointmentAt && (
         <p className="mt-2 text-xs text-stone-700">
           📅 {appointmentLabel(card.nextAppointmentAt)}

@@ -1,9 +1,10 @@
-import { asc } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/db";
 import { pipelineStages } from "@/db/schema";
 import { getMatchSettings, getSetting } from "@/server/settings";
 import { Card, PageHeader } from "@/components/server-ui";
 import { AutomationForm, MatchingForm, StagesForm } from "@/components/settings-forms";
+import { EVENT_LABEL, EVENT_TARGET, type StageEvent } from "@/lib/stage-rules";
 
 export const metadata = { title: "Instellingen" };
 
@@ -14,7 +15,7 @@ export default async function SettingsPage() {
     getSetting(db, "automation"),
     getSetting(db, "intakeFilters"),
     getSetting(db, "calendarRules"),
-    db.select().from(pipelineStages).orderBy(asc(pipelineStages.position)),
+    db.select().from(pipelineStages).where(eq(pipelineStages.active, true)).orderBy(asc(pipelineStages.position)),
   ]);
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -29,7 +30,14 @@ export default async function SettingsPage() {
         <StagesForm stages={stages} />
       </Card>
       <Card title="Automatische fasewijzigingen">
-        <AutomationForm a={automation} />
+        <AutomationForm
+          a={automation}
+          events={(Object.keys(EVENT_TARGET) as StageEvent[]).map((k) => ({
+            key: k,
+            label: EVENT_LABEL[k],
+            target: stages.find((s) => s.key === EVENT_TARGET[k])?.label ?? EVENT_TARGET[k],
+          }))}
+        />
       </Card>
       <Card title="Herkenning aanvraagmails en agenda (fase 2)">
         <div className="space-y-2 text-sm text-stone-700">

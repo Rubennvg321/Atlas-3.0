@@ -94,9 +94,9 @@ describe("KLAAR-criterium: aanvraag van bestaande klant met ander e-mailadres", 
     expect(dc[0].status).toBe("open");
   });
 
-  it("afgerond traject + nieuwe aanvraag: zelfde klant, nieuw traject", async () => {
+  it("afgeronde klus (review ontvangen) + nieuwe aanvraag: zelfde klant, nieuw traject", async () => {
     const eerste = await intakeLead(db(), lead({ name: "Henk de Vries", phone: "0611111111", email: "henk@devries.nl" }), { provider: "handmatig", externalId: uid() });
-    await changeStage(db(), { trajectId: eerste.trajectId!, toStage: "afgerond", source: "manual" });
+    await changeStage(db(), { trajectId: eerste.trajectId!, toStage: "review_ontvangen", source: "manual" });
     const r = await intakeLead(db(), lead({ name: "H. de Vries", phone: "+31611111111", email: "h.devries@gmail.com" }), { provider: "website", externalId: uid() });
     expect(r.decision).toBe("auto");
     expect(r.customerId).toBe(eerste.customerId);

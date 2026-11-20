@@ -121,29 +121,29 @@ describe("fasewijziging (KLAAR-criterium: slepen = dropdown)", () => {
 
   it("wijzigt het ene fase-veld en logt wie/wanneer/van/naar/hoe", async () => {
     const id = await newTraject();
-    const t = await changeStage(db(), { trajectId: id, toStage: "afspraak", source: "manual", expectedVersion: 1 });
-    expect(t.stage).toBe("afspraak");
+    const t = await changeStage(db(), { trajectId: id, toStage: "offerte_gepland", source: "manual", expectedVersion: 1 });
+    expect(t.stage).toBe("offerte_gepland");
     expect(t.version).toBe(2);
     const log = await db().select().from(stageChanges).where(eq(stageChanges.trajectId, id)).orderBy(stageChanges.createdAt);
     expect(log.map((l) => [l.fromStage, l.toStage, l.source])).toEqual([
       [null, "lead", "manual"],
-      ["lead", "afspraak", "manual"],
+      ["lead", "offerte_gepland", "manual"],
     ]);
   });
 
   it("verouderde versie (tweede apparaat) geeft een conflict en wijzigt niets", async () => {
     const id = await newTraject();
-    await changeStage(db(), { trajectId: id, toStage: "afspraak", source: "manual", expectedVersion: 1 }); // apparaat 1 (slepen)
-    await expect(changeStage(db(), { trajectId: id, toStage: "offerte", source: "manual", expectedVersion: 1 })).rejects.toThrow(ConflictError); // apparaat 2 (dropdown, oud scherm)
+    await changeStage(db(), { trajectId: id, toStage: "offerte_gepland", source: "manual", expectedVersion: 1 }); // apparaat 1 (slepen)
+    await expect(changeStage(db(), { trajectId: id, toStage: "offerte_gemaakt", source: "manual", expectedVersion: 1 })).rejects.toThrow(ConflictError); // apparaat 2 (dropdown, oud scherm)
     const [t] = await db().select().from(trajects).where(eq(trajects.id, id));
-    expect(t.stage).toBe("afspraak");
+    expect(t.stage).toBe("offerte_gepland");
   });
 
   it("gelijktijdige wijzigingen: precies één slaagt", async () => {
     const id = await newTraject();
     const results = await Promise.allSettled([
-      changeStage(db(), { trajectId: id, toStage: "afspraak", source: "manual", expectedVersion: 1 }),
-      changeStage(db(), { trajectId: id, toStage: "offerte", source: "manual", expectedVersion: 1 }),
+      changeStage(db(), { trajectId: id, toStage: "offerte_gepland", source: "manual", expectedVersion: 1 }),
+      changeStage(db(), { trajectId: id, toStage: "offerte_gemaakt", source: "manual", expectedVersion: 1 }),
     ]);
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     const log = await db().select().from(stageChanges).where(eq(stageChanges.trajectId, id));
@@ -157,7 +157,7 @@ describe("fasewijziging (KLAAR-criterium: slepen = dropdown)", () => {
     const t = await changeStage(db(), { trajectId: id, toStage: "vervallen", source: "manual", lostReason: "te_duur" });
     expect(t.lostReason).toBe("te_duur");
     // terugzetten wist de reden
-    const t2 = await changeStage(db(), { trajectId: id, toStage: "offerte", source: "manual" });
+    const t2 = await changeStage(db(), { trajectId: id, toStage: "offerte_gemaakt", source: "manual" });
     expect(t2.lostReason).toBeNull();
   });
 

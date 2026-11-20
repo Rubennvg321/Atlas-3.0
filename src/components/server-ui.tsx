@@ -23,6 +23,9 @@ const STAGE_COLORS: Record<string, string> = {
   rose: "bg-rose-100 text-rose-800",
   slate: "bg-slate-200 text-slate-700",
   zinc: "bg-zinc-200 text-zinc-600",
+  orange: "bg-orange-100 text-orange-800",
+  teal: "bg-teal-100 text-teal-800",
+  indigo: "bg-indigo-100 text-indigo-800",
 };
 
 export function stageColor(color: string) {

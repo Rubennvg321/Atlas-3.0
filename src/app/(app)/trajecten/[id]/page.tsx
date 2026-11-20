@@ -7,6 +7,9 @@ import { Timeline } from "@/components/timeline";
 import { ConfirmAction, NoteForm, TaskForm, TaskItem, TrajectEditForm, TrajectStageControl } from "@/components/traject-client";
 import { appointmentLabel, date, euro, formatPostcodeSafe } from "@/lib/format-extra";
 import { deleteTrajectAction } from "@/app/actions";
+import { FinanceCard, ProposalBanner } from "@/components/finance-card";
+import { getTrajectFinance } from "@/server/finance";
+import { openProposals } from "@/server/automation";
 import { displayName } from "@/lib/normalize";
 
 const MELDINGEN: Record<string, { text: string; tone: string }> = {
@@ -22,6 +25,7 @@ export default async function TrajectPage({ params, searchParams }: { params: Pr
   const d = await getTrajectDetail(getDb(), id);
   if (!d || d.traject.deletedAt) notFound();
   const { traject: t, customer: c } = d;
+  const [finance, proposals] = await Promise.all([getTrajectFinance(getDb(), id), openProposals(getDb(), id)]);
   const stage = d.stages.find((s) => s.key === t.stage);
   const hasSite = !!(t.siteStreet || t.sitePostcode);
   const address = hasSite
@@ -35,6 +39,10 @@ export default async function TrajectPage({ params, searchParams }: { params: Pr
   return (
     <div className="space-y-4">
       {m && <p className={`rounded-lg px-4 py-2 text-sm ${m.tone}`}>{m.text}</p>}
+      <ProposalBanner
+        trajectId={t.id}
+        proposals={proposals.map((p) => ({ id: p.id, reason: p.reason, label: d.stages.find((s) => s.key === p.toStage)?.label ?? p.toStage }))}
+      />
       {d.duplicates.length > 0 && (
         <Link href={`/dubbels/${d.duplicates[0].id}`} className="block rounded-lg bg-red-50 px-4 py-2 text-sm text-red-800 hover:bg-red-100">
           ⚠ Mogelijk dubbel met een andere klant: bekijk en beslis →
@@ -133,6 +141,16 @@ export default async function TrajectPage({ params, searchParams }: { params: Pr
             </ul>
           </Card>
 
+          <Card title="Financieel (excl. btw)">
+            <FinanceCard
+              trajectId={t.id}
+              f={{
+                ...finance,
+                purchases: finance.purchases.map((p) => ({ id: p.id, supplier: p.supplier, orderNumber: p.orderNumber, amountExcl: p.amountExcl, source: p.source, commission: p.commission })),
+              }}
+            />
+          </Card>
+
           <Card title="Afspraken">
             {d.appointments.length ? (
               <ul className="space-y-1 text-sm">
@@ -152,7 +170,7 @@ export default async function TrajectPage({ params, searchParams }: { params: Pr
               <ul className="space-y-1 text-sm">
                 {d.quotes.map((q) => (
                   <li key={q.id}>
-                    {q.number} · {euro(q.amountIncl)} · {q.status}
+                    {q.number} · {euro(q.amountExcl)} excl. btw · {q.status}
                   </li>
                 ))}
               </ul>

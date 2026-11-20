@@ -9,7 +9,7 @@ export const db = () => getDb();
 export async function resetDb() {
   const d = getDb();
   await d.execute(sql`
-    truncate table audit_log, sync_runs, external_refs, integrations, inbound_items, customer_merges,
+    truncate table purchase_orders, audit_log, sync_runs, external_refs, integrations, inbound_items, customer_merges,
       duplicate_candidates, timeline_events, emails, notes, tasks, quotes, appointments, stage_proposals,
       stage_changes, trajects, contact_points, contacts, customers, settings restart identity cascade
   `);

@@ -72,26 +72,19 @@ export function StagesForm({ stages }: { stages: { key: string; label: string; p
   );
 }
 
-export function AutomationForm({ a }: { a: { appointmentToAfspraak: string; quoteAcceptedToOpdracht: string } }) {
+export function AutomationForm({ a, events }: { a: Record<string, string>; events: { key: string; label: string; target: string }[] }) {
   const [state, action] = useActionState(saveAutomationAction, null);
-  const opts = (
-    <>
-      <option value="proposal">Als voorstel (ik bevestig)</option>
-      <option value="automatic">Automatisch</option>
-    </>
-  );
   return (
     <form action={action} className="space-y-3">
-      <Field label="Nieuwe afspraak in agenda → kaart naar 'Afspraak' (fase 2)">
-        <Select name="appointmentToAfspraak" defaultValue={a.appointmentToAfspraak} className="w-full">
-          {opts}
-        </Select>
-      </Field>
-      <Field label="Offerte geaccepteerd in WeFact → kaart naar 'Opdracht' (fase 3)">
-        <Select name="quoteAcceptedToOpdracht" defaultValue={a.quoteAcceptedToOpdracht} className="w-full">
-          {opts}
-        </Select>
-      </Field>
+      {events.map((e) => (
+        <Field key={e.key} label={`${e.label} → ${e.target}`}>
+          <Select name={e.key} defaultValue={a[e.key] ?? "proposal"} className="w-full">
+            <option value="automatic">Automatisch verplaatsen</option>
+            <option value="proposal">Als voorstel (ik bevestig)</option>
+          </Select>
+        </Field>
+      ))}
+      <p className="text-xs text-stone-500">Kaarten gaan alleen vooruit, nooit terug en nooit uit &lsquo;Vervallen&rsquo;.</p>
       <FormMessage state={state} />
       <div className="flex items-center gap-3">
         <SubmitButton>Opslaan</SubmitButton>

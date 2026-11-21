@@ -13,6 +13,8 @@ export interface FakeMail {
   to?: string;
   subject: string;
   body?: string;
+  /** Optioneel: aparte HTML-versie (zoals fedi: Duitse tekst + Nederlandse HTML). */
+  html?: string;
   date?: Date;
   labels?: string[];
 }
@@ -35,7 +37,10 @@ export function fakeGmail(mails: FakeMail[], account = OWN) {
         { name: "To", value: m.to ?? account },
         { name: "Subject", value: m.subject },
       ],
-      parts: m.body ? [{ mimeType: "text/plain", body: { data: b64urlEncode(m.body) } }] : [],
+      parts: [
+        ...(m.body ? [{ mimeType: "text/plain", body: { data: b64urlEncode(m.body) } }] : []),
+        ...(m.html ? [{ mimeType: "text/html", body: { data: b64urlEncode(m.html) } }] : []),
+      ],
     },
   });
   const client: GmailClient & { sent: string[]; failNextModify(): void; mails: FakeMail[] } = {

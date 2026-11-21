@@ -17,7 +17,7 @@ function fill(tpl: string, vars: Record<string, string>) {
 
 /**
  * Dagelijkse controle:
- *  - montage begonnen -> "In uitvoering"
+ *  - montage begonnen of al geweest -> "In uitvoering"
  *  - 2 dagen na de laatste montagedag -> reviewverzoek + "Review gestuurd"
  *  - 7 dagen na het verzoek zonder review -> herinnering
  */
@@ -40,7 +40,9 @@ export async function runDaily(db: DbOrTx, gmail: GmailClient | null, now = new 
       .orderBy(asc(appointments.startsAt));
     const days = montageDays(apps.map((a) => ({ startsAt: a.startsAt, endsAt: a.endsAt, allDay: a.allDay })));
 
-    if (MONTAGE_STAGES.includes(t.stage) && t.stage !== "in_uitvoering" && montageInProgress(days, today)) {
+    // Montage bezig of al voorbij (ook als Atlas pas later is gekoppeld): naar "In uitvoering".
+    const montageStartedOrDone = montageInProgress(days, today) || (days.length > 0 && today > days[days.length - 1]);
+    if (MONTAGE_STAGES.includes(t.stage) && t.stage !== "in_uitvoering" && montageStartedOrDone) {
       const r = await applyStageEvent(db, t.id, "montage_gestart", { refType: "montage", refId: days[0] });
       if (r.action !== "none") n++;
     }

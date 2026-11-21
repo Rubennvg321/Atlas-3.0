@@ -15,6 +15,7 @@ import type { GmailClient } from "./gmail-client";
 import { cfg, getIntegration, upsertIntegration } from "./state";
 
 const text = (m: GmailMessage) => bodyText(m, htmlToText);
+const htmlText = (m: GmailMessage) => bodyText(m, htmlToText, "html");
 
 /** Voert `fn` één keer per bericht uit; een fout laat geen spoor na, zodat het opnieuw wordt geprobeerd. */
 async function oncePerMessage(db: DbOrTx, kind: string, id: string, fn: () => Promise<{ status: string; payload?: unknown }>) {
@@ -79,7 +80,9 @@ export async function syncSupplierMails(db: DbOrTx, gmail: GmailClient): Promise
   let n = 0;
   for (const rule of s.rules) {
     for (const id of await gmail.search(`from:${rule.from} subject:orderbevestiging newer_than:60d`, 50)) {
-      const did = await oncePerMessage(db, `gmail-inkoop`, id, async () => {
+      // "-v2": mails die met de oude fedi-herkenning zijn overgeslagen, worden één keer opnieuw bekeken
+      // (het vastleggen is idempotent op leverancier + ordernummer, dus er ontstaan geen dubbelen).
+      const did = await oncePerMessage(db, `gmail-inkoop-v2`, id, async () => {
         const m = await gmail.get(id, "full");
         let order = null;
         if (rule.parser === "ppc-pdf") {
@@ -88,7 +91,9 @@ export async function syncSupplierMails(db: DbOrTx, gmail: GmailClient): Promise
             if (order) break;
           }
         } else if (rule.parser === "fedi-mail") {
-          order = parseFediOrder(text(m));
+          // fedi stuurt een Duitse tekstversie en een Nederlandse HTML-versie; alleen die laatste
+          // bevat de commissie ("Comissie: Fam. …"). Daarom eerst de HTML proberen.
+          order = parseFediOrder(htmlText(m)) ?? parseFediOrder(text(m));
         }
         if (!order || order.amountExcl === null) return { status: "ignored", payload: { reden: "niet herkend" } };
         const r = await recordSupplierOrder(db, order, { gmailMessageId: id, source: "gmail" });

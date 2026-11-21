@@ -80,6 +80,16 @@ describe("Gmail: WeFact en leveranciers", () => {
     expect(await db().select().from(quotes)).toHaveLength(1);
   });
 
+  it("fedi met Duitse tekstversie en Nederlandse HTML: de HTML (met commissie) wordt gelezen", async () => {
+    const r = await intakeLead(db(), lead({ name: "Kees Voorbeeld", phone: "0611113333" }), { provider: "handmatig", externalId: uid() });
+    await changeStage(db(), { trajectId: r.trajectId!, toStage: "montage_gepland", source: "manual" });
+    const german = "Sehr geehrter Herr,\n\nBestellnummer: BE12558\n\nGesamtkosten Netto: € 1.361,20\n";
+    const html = `<div><p>Beste klant,</p>Bedankt voor uw bestelling bij fedi!<br>Wij hebben uw bestelling met nummer <strong>BE12558</strong> goed ontvangen.<br><br>Extra informatie: Comissie: Fam. Voorbeeld\r\nLevering: week 51<BR><table><tr><td>Totaal</td></tr></table><strong>Totaal: € 1.361,20</strong><br></div>`;
+    const g = fakeGmail([{ id: "f2", from: "Fedi <info@fedi.de>", subject: "Orderbevestiging", body: german, html }]);
+    expect(await syncSupplierMails(db(), g)).toBe(1);
+    expect((await getTrajectFinance(db(), r.trajectId!)).purchaseExcl).toBe(1361.2);
+  });
+
   it("fedi-orderbevestiging wordt inkoop bij het juiste traject", async () => {
     const r = await intakeLead(db(), lead({ name: "Kees Voorbeeld", phone: "0611113333" }), { provider: "handmatig", externalId: uid() });
     await changeStage(db(), { trajectId: r.trajectId!, toStage: "montage_gepland", source: "manual" });
@@ -193,6 +203,50 @@ describe("Google Agenda", () => {
     expect(seen.every((o) => !(o as { syncToken?: string }).syncToken)).toBe(true);
   });
 
+  it("montage met alleen een naam ('Fam. Jonker') wordt gekoppeld aan het geaccepteerde traject", async () => {
+    const r = await intakeLead(db(), lead({ name: "Piet Jonker", phone: "0612340000" }), { provider: "handmatig", externalId: uid() });
+    await changeStage(db(), { trajectId: r.trajectId!, toStage: "offerte_geaccepteerd", source: "manual" });
+    await syncCalendar(db(), fakeCalendar([{ id: "j1", etag: "1", status: "confirmed", summary: "Fam. Fam. Jonker", start: { date: "2027-01-05" }, end: { date: "2027-01-07" } }]));
+    const [a] = await db().select().from(appointments);
+    expect(a.trajectId).toBe(r.trajectId);
+    expect(await stageOf(r.trajectId!)).toBe("montage_gepland");
+  });
+
+  it("montage met alleen een naam koppelt niet aan een lead, en niet als de naam twee keer voorkomt", async () => {
+    const lead1 = await intakeLead(db(), lead({ name: "Anna Bakker", phone: "0612340001" }), { provider: "handmatig", externalId: uid() });
+    const a = await intakeLead(db(), lead({ name: "Jan de Vries", phone: "0612340002" }), { provider: "handmatig", externalId: uid() });
+    const b = await intakeLead(db(), lead({ name: "Els de Vries", phone: "0612340003", street: "Dorpsstraat", houseNumber: 1, postcode: "1234AB" }), { provider: "handmatig", externalId: uid() });
+    for (const t of [a, b]) await changeStage(db(), { trajectId: t.trajectId!, toStage: "offerte_geaccepteerd", source: "manual" });
+    await syncCalendar(
+      db(),
+      fakeCalendar([
+        { id: "b1", etag: "1", status: "confirmed", summary: "Fam. Bakker", start: { date: "2027-01-05" }, end: { date: "2027-01-06" } },
+        { id: "v1", etag: "1", status: "confirmed", summary: "Fam. de Vries", start: { date: "2027-01-08" }, end: { date: "2027-01-09" } },
+      ]),
+    );
+    const rows = await db().select().from(appointments);
+    expect(rows.every((x) => x.trajectId === null)).toBe(true);
+    expect(await stageOf(lead1.trajectId!)).toBe("lead");
+  });
+
+  it("eerder zonder klant opgeslagen montage wordt bij een nieuwe ronde alsnog gekoppeld", async () => {
+    const ev = { id: "k1", etag: "1", status: "confirmed", summary: "Fam. Klimkowska", start: { date: "2026-11-26" }, end: { date: "2026-11-28" } };
+    await processEvent(db(), ev, []);
+    expect((await db().select().from(appointments))[0].trajectId).toBeNull();
+    const r = await intakeLead(db(), lead({ name: "Ola Klimkowska", phone: "0612340004" }), { provider: "handmatig", externalId: uid() });
+    await changeStage(db(), { trajectId: r.trajectId!, toStage: "offerte_geaccepteerd", source: "manual" });
+    await processEvent(db(), ev, []);
+    const rows = await db().select().from(appointments);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].trajectId).toBe(r.trajectId);
+  });
+
+  it("oud adviesgesprek (> 30 dagen) van een onbekende maakt geen nieuwe lead", async () => {
+    const ev = { ...advies("old1", "onbekend@example.nl", ""), start: { dateTime: "2026-01-10T10:00:00+01:00" }, end: { dateTime: "2026-01-10T11:00:00+01:00" } };
+    await processEvent(db(), ev, []);
+    expect(await db().select().from(customers)).toHaveLength(0);
+  });
+
   it("andere afspraken (verkeerde kleur) worden niet opgeslagen", async () => {
     await syncCalendar(db(), fakeCalendar([{ id: "x", status: "confirmed", summary: "Tandarts", colorId: "2", start: { dateTime: "2026-12-01T10:00:00+01:00" }, end: { dateTime: "2026-12-01T11:00:00+01:00" } }]));
     expect(await db().select().from(appointments)).toHaveLength(0);
@@ -241,6 +295,14 @@ describe("dagelijkse controle en reviews", () => {
     return r;
   }
   const reviewsOn = () => setSetting(db(), "reviews", { ...DEFAULT_SETTINGS.reviews, enabled: true, link: "https://g.page/r/test/review" });
+
+  it("montage die al geweest is (later gekoppeld): ook naar 'In uitvoering', niet ervoor", async () => {
+    const r = await montageTraject();
+    await runDaily(db(), null, new Date("2026-12-01T08:00:00Z"));
+    expect(await stageOf(r.trajectId!)).toBe("montage_gepland");
+    await runDaily(db(), null, new Date("2026-12-20T08:00:00Z"));
+    expect(await stageOf(r.trajectId!)).toBe("in_uitvoering");
+  });
 
   it("op de eerste montagedag naar 'In uitvoering'", async () => {
     const r = await montageTraject();

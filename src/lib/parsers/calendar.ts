@@ -70,7 +70,8 @@ export function parseLocation(location: string | null): ParsedAddress | null {
 export function parseMontageTitle(summary: string) {
   const m = summary.trim().match(/^fam(?:ilie)?\.?\s+(.+)$/i);
   if (!m) return [];
-  let rest = m[1].replace(/\s+/g, " ").trim();
+  // "Fam. Fam. Van huissteden" (dubbel getypt) -> "Van huissteden"
+  let rest = m[1].replace(/^(?:fam(?:ilie)?\.?\s+)+/i, "").replace(/\s+/g, " ").trim();
   // "Fam. Jansen, Kerkstraat 12" of "Fam. Jansen - Kerkstraat 12": duidelijke scheiding
   const sep = rest.match(/^(.+?)\s*(?:,|\s-\s|\+)\s*(.+)$/);
   if (sep) {
@@ -78,7 +79,12 @@ export function parseMontageTitle(summary: string) {
     return [{ name: sep[1].trim(), street: a.street, houseNumber: a.houseNumber, addition: a.addition }];
   }
   const addr = rest.match(/^(.*\D)\s(\d{1,5}(?:\s?[A-Za-z]{1,3}|[-/][A-Za-z0-9]{1,4})?)$/);
-  if (!addr) return [{ name: rest, street: null, houseNumber: null, addition: null }];
+  if (!addr) {
+    // Alleen een naam, soms met een notitie erachter ("Tiemessen zacht", "Metin pvc"):
+    // eerst de hele tekst, dan steeds een woord minder.
+    const words = rest.split(" ");
+    return words.map((_, i) => ({ name: words.slice(0, words.length - i).join(" "), street: null, houseNumber: null, addition: null }));
+  }
   const words = addr[1].trim().split(" ");
   const nr = parseAddressLine(`x ${addr[2]}`);
   rest = "";

@@ -39,11 +39,12 @@ function walk(p: GmailPart | undefined, out: GmailPart[] = []): GmailPart[] {
 }
 
 /** Leesbare tekst van een bericht: text/plain, anders text/html omgezet. */
-export function bodyText(m: GmailMessage, htmlToText: (h: string) => string): string {
+export function bodyText(m: GmailMessage, htmlToText: (h: string) => string, prefer: "plain" | "html" = "plain"): string {
   const parts = walk(m.payload);
   const plain = parts.find((p) => p.mimeType === "text/plain" && p.body?.data);
-  if (plain?.body?.data) return b64urlDecode(plain.body.data).toString("utf8");
   const html = parts.find((p) => p.mimeType === "text/html" && p.body?.data);
+  if (prefer === "html" && html?.body?.data) return htmlToText(b64urlDecode(html.body.data).toString("utf8"));
+  if (plain?.body?.data) return b64urlDecode(plain.body.data).toString("utf8");
   if (html?.body?.data) return htmlToText(b64urlDecode(html.body.data).toString("utf8"));
   return m.snippet ?? "";
 }

@@ -9,6 +9,9 @@ import { findCandidateIds, loadProfiles, matchProfile } from "../customers";
 import { intakeLead } from "../intake";
 import { applyStageEvent } from "../automation";
 import { findOpenTraject, createTraject } from "../trajects";
+import { findTrajectByFamilyName } from "../purchases";
+import { pipelineStages } from "@/db/schema";
+import { inArray } from "drizzle-orm";
 import { getMatchSettings, getSetting } from "../settings";
 import { addTimeline } from "../timeline";
 import type { CalendarClient, CalendarEvent } from "./calendar-client";
@@ -19,7 +22,11 @@ import { cfg, getIntegration, upsertIntegration } from "./state";
  * afspraken (vanaf 30 dagen terug) opnieuw in plaats van alleen wijzigingen,
  * zodat afspraken die eerder gemist zijn alsnog worden herkend.
  */
-const RULES_VERSION = 2;
+const RULES_VERSION = 3;
+/** Zo ver terug leest Atlas de agenda bij een volledige ronde (voor al uitgevoerde montages). */
+const LOOKBACK_DAYS = 120;
+/** Oudere adviesgesprekken maken geen nieuwe klant/lead meer aan; ze worden alleen gekoppeld. */
+const NEW_LEAD_MAX_AGE_DAYS = 30;
 
 function times(e: CalendarEvent) {
   const allDay = !!e.start?.date && !e.start?.dateTime;
@@ -65,7 +72,16 @@ async function matchMontage(db: DbOrTx, cands: { name: string; street: string | 
       } else if (best.customerId !== customerId) second = Math.max(second, r.score);
     }
   }
-  if (best && best.score >= s.autoThreshold && best.score > second) return best.customerId;
+  if (best && best.score >= s.autoThreshold && best.score > second) return { customerId: best.customerId, trajectId: null as string | null };
+
+  // Geen (bruikbaar) adres in de titel, zoals "Fam. Jonker": koppel op achternaam, maar alleen aan
+  // een traject waarvan de offerte al geaccepteerd is én alleen als er precies één zo'n traject is.
+  const won = (await db.select().from(pipelineStages).where(inArray(pipelineStages.kind, ["won"]))).map((x) => x.key);
+  if (!won.length) return null;
+  for (const c of cands) {
+    const hit = await findTrajectByFamilyName(db, `fam. ${c.name}`, won);
+    if (hit) return { customerId: hit.customerId, trajectId: hit.trajectId as string | null };
+  }
   return null;
 }
 
@@ -94,7 +110,7 @@ export async function processEvent(db: DbOrTx, e: CalendarEvent, own: string[], 
   }
 
   const { startsAt, endsAt, allDay } = times(e);
-  if (existing) {
+  if (existing && existing.customerId) {
     // Bestaande afspraak: tijd/locatie bijwerken (Google is leidend), koppeling behouden.
     if (existing.googleEtag === e.etag && existing.status === "gepland") return false;
     await db
@@ -106,6 +122,7 @@ export async function processEvent(db: DbOrTx, e: CalendarEvent, own: string[], 
   }
 
   let customerId: string | null = null;
+  let montageTraject: string | null = null;
   if (cls.kind === "advies") {
     const lead: LeadInput = {
       name: null,
@@ -118,6 +135,7 @@ export async function processEvent(db: DbOrTx, e: CalendarEvent, own: string[], 
       postcode: cls.address?.postcode ?? null,
       city: cls.address?.city ?? null,
     };
+    const stale = endsAt.getTime() < Date.now() - NEW_LEAD_MAX_AGE_DAYS * 86400000;
     if (!lead.emails.length && !lead.postcode && !lead.street) {
       customerId = null;
     } else {
@@ -126,17 +144,26 @@ export async function processEvent(db: DbOrTx, e: CalendarEvent, own: string[], 
       // Uitnodiging naar het e-mailadres van precies één bekende klant: dat ís die klant.
       else if (m.decision === "doubt" && m.doubts.length === 1 && m.doubts[0].result.signals.some((x) => x.key === "email"))
         customerId = m.doubts[0].customerId;
-      else {
+      else if (!stale) {
         const r = await intakeLead(db, lead, { provider: "agenda", externalId: `gcal:${e.id}`, traject: "none" });
         customerId = r.customerId;
       }
     }
   } else {
-    customerId = await matchMontage(db, cls.nameCandidates, cls.address);
+    const m = await matchMontage(db, cls.nameCandidates, cls.address);
+    customerId = m?.customerId ?? null;
+    montageTraject = m?.trajectId ?? null;
   }
 
-  const trajectId = customerId ? await trajectFor(db, customerId) : null;
-  await db
+  const trajectId = montageTraject ?? (customerId ? await trajectFor(db, customerId) : null);
+  if (existing) {
+    // Eerder opgeslagen zonder klant: nu opnieuw geprobeerd te koppelen.
+    if (!customerId && existing.googleEtag === e.etag && existing.status === "gepland") return false;
+    await db
+      .update(appointments)
+      .set({ trajectId, customerId, kind: cls.kind, title: e.summary ?? existing.title, startsAt, endsAt, allDay, location: e.location ?? null, status: "gepland", googleEtag: e.etag ?? null, updatedAt: new Date() })
+      .where(eq(appointments.id, existing.id));
+  } else await db
     .insert(appointments)
     .values({
       trajectId,
@@ -170,7 +197,7 @@ export async function syncCalendar(db: DbOrTx, cal: CalendarClient): Promise<num
   const ids = [...new Set((calendars ?? []).map((c) => c.id).filter(Boolean))];
   if (!ids.length) ids.push("primary");
   const own = cal.account ? [cal.account.toLowerCase()] : [];
-  const timeMin = () => new Date(Date.now() - 30 * 86400000).toISOString();
+  const timeMin = () => new Date(Date.now() - LOOKBACK_DAYS * 86400000).toISOString();
 
   let n = 0;
   for (const calendarId of ids) {

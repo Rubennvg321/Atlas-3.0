@@ -6,7 +6,8 @@ leg uit in eenvoudig Nederlands, stap voor stap, met kopieer-en-plak-commando's)
 ## Techniek
 Next.js 15 (App Router) + TypeScript + Tailwind · PostgreSQL 17 (Scaleway, beheerd) + Drizzle (migraties in `drizzle/`)
 · Auth.js met Google · Vitest (unit + integratie tegen echte Postgres) · Playwright (e2e).
-Werk op branch `claude/atlas-crm-system-gvk5m4`.
+Werkwijze: `main` is de hoofdbranch. Werk in een eigen branch en lever op via een pull request naar `main`;
+na het samenvoegen werkt de eigenaar de server bij met `bash /opt/atlas/deploy/update.sh` (server staat op `main`).
 
 ## Productie
 - Server: Scaleway AMS1, Ubuntu, vast IP 51.15.84.246 (staat op de WeFact-whitelist). Code in `/opt/atlas`.

@@ -46,10 +46,12 @@ export default async function SettingsPage() {
               Aanvraagmail: afzender <code className="rounded bg-stone-100 px-1">{r.from}</code>, onderwerp bevat <code className="rounded bg-stone-100 px-1">{r.subjectContains}</code>
             </p>
           ))}
+          <p>Agenda&apos;s die Atlas leest: {(calendar.calendars ?? []).map((c) => c.name).join(", ") || "hoofdagenda"}</p>
           <p>
-            Adviesgesprek: gele afspraak met &ldquo;{calendar.advies.titleContains}&rdquo; (klant via locatie en gast-e-mail)
+            Adviesgesprek: titel met &ldquo;Advies gesprek&rdquo; of &ldquo;Adviesgesprek&rdquo; (klant via locatie en gast-e-mail)
           </p>
-          <p>Montage: rode afspraak met &ldquo;fam. Naam + straat en huisnummer&rdquo;</p>
+          <p>Montage: titel &ldquo;Fam. Naam + straat en huisnummer&rdquo;</p>
+          <p className="text-xs text-stone-500">Een afspraak met een eigen, afwijkende kleur telt niet mee; zonder eigen kleur (kleur van de agenda) wel.</p>
           <p className="text-xs text-stone-500">Deze regels worden actief zodra Gmail en Google Agenda zijn gekoppeld.</p>
         </div>
       </Card>

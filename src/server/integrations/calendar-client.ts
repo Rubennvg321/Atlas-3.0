@@ -20,15 +20,15 @@ export interface CalendarPage {
 export interface CalendarClient {
   account: string | null;
   /** Wijzigingen sinds syncToken; zonder token vanaf timeMin. Gooit {status: 410} als het token verlopen is. */
-  changes(opts: { syncToken?: string | null; timeMin?: string }): Promise<CalendarPage>;
+  changes(opts: { calendarId?: string; syncToken?: string | null; timeMin?: string }): Promise<CalendarPage>;
 }
 
-const BASE = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+const base = (calendarId: string) => `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`;
 
 export function liveCalendar(token: string, account: string | null): CalendarClient {
   return {
     account,
-    async changes({ syncToken, timeMin }) {
+    async changes({ calendarId = "primary", syncToken, timeMin }) {
       const events: CalendarEvent[] = [];
       let pageToken: string | undefined;
       let nextSyncToken: string | null = null;
@@ -37,7 +37,7 @@ export function liveCalendar(token: string, account: string | null): CalendarCli
         if (syncToken) p.set("syncToken", syncToken);
         else if (timeMin) p.set("timeMin", timeMin);
         if (pageToken) p.set("pageToken", pageToken);
-        const r = await googleFetch<{ items?: CalendarEvent[]; nextPageToken?: string; nextSyncToken?: string }>(token, `${BASE}?${p}`);
+        const r = await googleFetch<{ items?: CalendarEvent[]; nextPageToken?: string; nextSyncToken?: string }>(token, `${base(calendarId)}?${p}`);
         events.push(...(r.items ?? []));
         pageToken = r.nextPageToken;
         nextSyncToken = r.nextSyncToken ?? nextSyncToken;

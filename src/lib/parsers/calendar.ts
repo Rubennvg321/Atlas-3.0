@@ -2,8 +2,8 @@ import { parseAddressLine, parsePostcodeCity, normalizeEmail } from "../normaliz
 
 /**
  * Herkent klantafspraken in Google Agenda:
- *  - Adviesgesprek: geel label + titel "Advies gesprek Steps&Stairs"; klant via locatie (adres) en gast (e-mail).
- *  - Montage: rood label + titel "Fam. Naam + straat huisnummer".
+ *  - Adviesgesprek: titel met "Advies gesprek" (geel / agenda "Offerte"); klant via locatie (adres) en gast (e-mail).
+ *  - Montage: titel "Fam. Naam + straat huisnummer" (rood / agenda "Werk Ruben").
  */
 export interface CalendarRules {
   advies: { colorId: string; titleContains: string };
@@ -89,15 +89,39 @@ export function parseMontageTitle(summary: string) {
   return out;
 }
 
+/** Alleen letters en cijfers, kleine letters: "Advies gesprek" = "Adviesgesprek". */
+const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * Titel van een adviesgesprek. De bedrijfsnaam wordt vaak net anders getypt
+ * ("Steps&Stairs", "Step&Stairs", of weggelaten), dus die telt niet mee;
+ * "Advies gesprek" / "Adviesgesprek" ergens in de titel is genoeg.
+ */
+export function isAdviesTitle(title: string, titleContains: string) {
+  const core = titleContains
+    .split(/\s+/)
+    .filter((w) => !w.includes("&") && !/^steps?$|^stairs$/i.test(w))
+    .join(" ");
+  const key = squash(core || titleContains);
+  return !!key && squash(title).includes(key);
+}
+
+/**
+ * Kleur: een afspraak zonder eigen kleur krijgt de kleur van de agenda waarin
+ * hij staat (zo werkt Google Agenda meestal). Die telt dus als goed; alleen een
+ * afwijkende eigen kleur sluit een afspraak uit.
+ */
+const colorOk = (eventColor: string | null, ruleColor: string | null | undefined) => !eventColor || !ruleColor || eventColor === ruleColor;
+
 export function classifyEvent(e: CalendarEventInput, rules: CalendarRules): CalendarClassification {
   const title = (e.summary ?? "").trim();
   const own = new Set((e.ownEmails ?? []).map((x) => x.toLowerCase()));
   const emails = e.attendees.map((a) => normalizeEmail(a)).filter((a): a is string => !!a && !own.has(a));
   const address = parseLocation(e.location);
-  if (e.colorId === rules.advies.colorId && title.toLowerCase().includes(rules.advies.titleContains.toLowerCase())) {
+  if (colorOk(e.colorId, rules.advies.colorId) && isAdviesTitle(title, rules.advies.titleContains)) {
     return { kind: "advies", emails, address };
   }
-  if (e.colorId === rules.montage.colorId && /^fam(ilie)?\.?\s/i.test(title)) {
+  if (colorOk(e.colorId, rules.montage.colorId) && /^fam(ilie)?\.?\s/i.test(title)) {
     return { kind: "montage", nameCandidates: parseMontageTitle(title), address };
   }
   return { kind: "overig" };

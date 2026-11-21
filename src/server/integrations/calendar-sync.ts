@@ -14,7 +14,12 @@ import { addTimeline } from "../timeline";
 import type { CalendarClient, CalendarEvent } from "./calendar-client";
 import { cfg, getIntegration, upsertIntegration } from "./state";
 
-const CAL_ID = "primary";
+/**
+ * Versie van de herkenningsregels. Wordt die hoger, dan leest Atlas alle
+ * afspraken (vanaf 30 dagen terug) opnieuw in plaats van alleen wijzigingen,
+ * zodat afspraken die eerder gemist zijn alsnog worden herkend.
+ */
+const RULES_VERSION = 2;
 
 function times(e: CalendarEvent) {
   const allDay = !!e.start?.date && !e.start?.dateTime;
@@ -64,9 +69,9 @@ async function matchMontage(db: DbOrTx, cands: { name: string; street: string | 
   return null;
 }
 
-export async function processEvent(db: DbOrTx, e: CalendarEvent, own: string[]): Promise<boolean> {
+export async function processEvent(db: DbOrTx, e: CalendarEvent, own: string[], calendarId = "primary"): Promise<boolean> {
   const rules = await getSetting(db, "calendarRules");
-  const [existing] = await db.select().from(appointments).where(and(eq(appointments.googleCalendarId, CAL_ID), eq(appointments.googleEventId, e.id)));
+  const [existing] = await db.select().from(appointments).where(and(eq(appointments.googleCalendarId, calendarId), eq(appointments.googleEventId, e.id)));
 
   if (e.status === "cancelled") {
     if (existing && existing.status !== "geannuleerd") {
@@ -142,7 +147,7 @@ export async function processEvent(db: DbOrTx, e: CalendarEvent, own: string[]):
       endsAt,
       allDay,
       location: e.location ?? null,
-      googleCalendarId: CAL_ID,
+      googleCalendarId: calendarId,
       googleEventId: e.id,
       googleEtag: e.etag ?? null,
     })
@@ -161,23 +166,44 @@ export async function processEvent(db: DbOrTx, e: CalendarEvent, own: string[]):
 }
 
 export async function syncCalendar(db: DbOrTx, cal: CalendarClient): Promise<number> {
-  const row = await getIntegration(db, "google_calendar");
-  const c = cfg(row);
-  let page;
-  try {
-    page = await cal.changes(c.syncToken ? { syncToken: String(c.syncToken) } : { timeMin: new Date(Date.now() - 30 * 86400000).toISOString() });
-  } catch (e) {
-    if ((e as { status?: number }).status === 410) {
-      // Sync-token verlopen: volledig opnieuw (idempotent dankzij unieke event-id's).
-      page = await cal.changes({ timeMin: new Date(Date.now() - 30 * 86400000).toISOString() });
-    } else throw e;
-  }
+  const { calendars } = await getSetting(db, "calendarRules");
+  const ids = [...new Set((calendars ?? []).map((c) => c.id).filter(Boolean))];
+  if (!ids.length) ids.push("primary");
   const own = cal.account ? [cal.account.toLowerCase()] : [];
+  const timeMin = () => new Date(Date.now() - 30 * 86400000).toISOString();
+
   let n = 0;
-  for (const e of page.events) if (await processEvent(db, e, own)) n++;
-  // Token pas opslaan als alles verwerkt is: faalt het halverwege, dan komt alles opnieuw (zonder dubbelen).
-  if (page.nextSyncToken) await upsertIntegration(db, "google_calendar", { config: { ...cfg(await getIntegration(db, "google_calendar")), syncToken: page.nextSyncToken } });
+  for (const calendarId of ids) {
+    const c = cfg(await getIntegration(db, "google_calendar"));
+    const fresh = c.rulesVersion !== RULES_VERSION;
+    const tokens = (fresh ? {} : ((c.syncTokens as Record<string, string>) ?? {})) as Record<string, string>;
+    // Oude opslag (één token, alleen hoofdagenda) blijft bruikbaar.
+    if (!fresh && !tokens.primary && c.syncToken && calendarId === "primary") tokens.primary = String(c.syncToken);
+    const token = tokens[calendarId];
+
+    let page;
+    try {
+      page = await cal.changes(token ? { calendarId, syncToken: token } : { calendarId, timeMin: timeMin() });
+    } catch (e) {
+      const status = (e as { status?: number }).status;
+      if (status === 410) {
+        // Sync-token verlopen: volledig opnieuw (idempotent dankzij unieke event-id's).
+        page = await cal.changes({ calendarId, timeMin: timeMin() });
+      } else if (status === 404 && calendarId !== "primary") {
+        // Agenda bestaat niet (meer) of is niet gedeeld: de andere agenda's gewoon doorlopen.
+        console.warn(`agenda ${calendarId} niet gevonden, overgeslagen`);
+        continue;
+      } else throw e;
+    }
+    for (const e of page.events) if (await processEvent(db, e, own, calendarId)) n++;
+    // Token pas opslaan als alles verwerkt is: faalt het halverwege, dan komt alles opnieuw (zonder dubbelen).
+    if (page.nextSyncToken) {
+      const latest = cfg(await getIntegration(db, "google_calendar"));
+      const kept = latest.rulesVersion === RULES_VERSION ? ((latest.syncTokens as Record<string, string>) ?? {}) : {};
+      await upsertIntegration(db, "google_calendar", {
+        config: { ...latest, syncToken: undefined, rulesVersion: RULES_VERSION, syncTokens: { ...kept, [calendarId]: page.nextSyncToken } },
+      });
+    }
+  }
   return n;
 }
-
-

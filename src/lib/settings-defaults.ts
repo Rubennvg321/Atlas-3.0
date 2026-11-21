@@ -26,6 +26,14 @@ export const DEFAULT_SETTINGS = {
   },
   /** Agenda-herkenning (fase 2): Google Agenda kleur-id's. 5 = geel (Banana), 11 = rood (Tomato). */
   calendarRules: {
+    /**
+     * Welke agenda's Atlas leest. "primary" = de hoofdagenda (Werk Ruben, montages);
+     * de tweede is de agenda "Offerte" waarin de adviesgesprekken staan.
+     */
+    calendars: [
+      { id: "primary", name: "Werk Ruben" },
+      { id: "c_250agaho4v6v83vv8podvdkefs@group.calendar.google.com", name: "Offerte" },
+    ] as { id: string; name: string }[],
     advies: { colorId: "5", titleContains: "Advies gesprek Steps&Stairs" },
     montage: { colorId: "11", titlePattern: "^fam\\.?\\s+(?<name>.+?)\\s+(?<street>\\D+?)\\s*(?<nr>\\d+\\s*\\w{0,4})$" },
   },

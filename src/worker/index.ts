@@ -18,7 +18,7 @@ import { getIntegration, isDue, runTracked, type Provider } from "../server/inte
  * Alles is idempotent, dus een herstart of dubbele run kan geen kwaad.
  */
 const WORKER_ID = `${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
-const INTERVALS: Record<Exclude<Provider, "google">, number> = { gmail: 2, google_calendar: 5, wefact: 15, dagelijks: 60 };
+const INTERVALS: Record<Exclude<Provider, "google">, number> = { gmail: 2, google_calendar: 2, wefact: 15, dagelijks: 60 };
 
 async function tick() {
   const db = getDb();

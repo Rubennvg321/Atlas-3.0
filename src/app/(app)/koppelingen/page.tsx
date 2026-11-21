@@ -65,7 +65,7 @@ export default async function KoppelingenPage({ searchParams }: { searchParams: 
         {googleConnected && (
           <div className="mt-4">
             <SyncLine provider="gmail" label="Gmail (aanvragen, orderbevestigingen, geaccepteerde offertes, klantmail) · elke 2 minuten" />
-            <SyncLine provider="google_calendar" label="Google Agenda (gele en rode afspraken) · elke 5 minuten" />
+            <SyncLine provider="google_calendar" label="Google Agenda (adviesgesprekken en montages) · elke 2 minuten" />
           </div>
         )}
       </Card>

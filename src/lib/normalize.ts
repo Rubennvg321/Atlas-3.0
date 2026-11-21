@@ -144,6 +144,9 @@ const INFIXES = [
   "ter", "ten", "te", "le", "la", "du", "da", "di", "vd", "v.d.", "v/d",
 ] as const;
 
+/** Voorvoegsels die bij de achternaam horen (geen Nederlands tussenvoegsel): El Amrani, Ben Ali, Abu Bakr. */
+const NAME_PARTICLES = new Set(["el", "al", "ben", "bin", "abu", "ait", "aït", "ou", "mc", "mac", "o'"]);
+
 const SALUTATIONS = /^(fam(ilie)?\.?|dhr\.?|mevr?\.?|mw\.?|hr\.?|heer|mevrouw|meneer|de heer|mr\.?|ir\.?|ing\.?|drs\.?)\s+/i;
 
 export interface PersonName {
@@ -204,12 +207,11 @@ export function splitDutchName(input: string | null | undefined): PersonName {
       }
     }
   }
-  if (hadSalutation) {
-    // "fam. Peter Jansen" komt zelden voor; neem alles als achternaam behalve
-    // als het duidelijk voornaam + achternaam is.
-    return { firstName: words.slice(0, -1).join(" "), infix: null, lastName: words[words.length - 1] };
-  }
-  return { firstName: words.slice(0, -1).join(" "), infix: null, lastName: words[words.length - 1] };
+  // Voorvoegsels als "El", "Ben", "Abu" horen bij de achternaam.
+  let lastStart = words.length - 1;
+  while (lastStart > (hadSalutation ? 0 : 1) && NAME_PARTICLES.has(words[lastStart - 1].toLowerCase())) lastStart--;
+  if (hadSalutation && lastStart === 1 && NAME_PARTICLES.has(words[0].toLowerCase())) lastStart = 0;
+  return { firstName: words.slice(0, lastStart).join(" ") || null, infix: null, lastName: words.slice(lastStart).join(" ") };
 }
 
 function canonicalInfix(inf: string): string {

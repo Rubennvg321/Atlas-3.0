@@ -1,0 +1,29 @@
+# Productie op de VPS (Scaleway Amsterdam). De database is de beheerde
+# PostgreSQL van Scaleway; DATABASE_URL staat in .env op de server.
+services:
+  web:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "127.0.0.1:3000:3000"
+  # Achtergrondproces: Gmail, Agenda, WeFact en de dagelijkse controle.
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    command: ["npx", "tsx", "src/worker/index.ts"]
+    depends_on: [web]
+  # Caddy regelt HTTPS (Let's Encrypt) automatisch.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [web]
+volumes:
+  caddy_data:

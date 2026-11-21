@@ -85,7 +85,7 @@ export function rowToLead(r: Record<string, string>): LeadInput {
     r.lastName || r.firstName
       ? { firstName: r.firstName ?? null, infix: r.infix ?? null, lastName: r.lastName ?? null }
       : splitDutchName(r.name);
-  let street = r.street ?? null;
+  let street: string | null = r.street ?? null;
   let houseNumber: number | null = null;
   let addition = normalizeAddition(r.addition);
   if (r.houseNumber) {
@@ -137,7 +137,7 @@ function rowHash(lead: LeadInput, stage: string | undefined) {
 
 async function runImport(db: DB, text: string, userId: string | null): Promise<ImportSummary> {
   const { rows, unknown } = parseCsv(text);
-  const stages = await db.select().from(pipelineStages);
+  const stages = await db.select().from(pipelineStages).where(eq(pipelineStages.active, true));
   const stageByLabel = new Map(stages.flatMap((s) => [[s.key.toLowerCase(), s.key], [s.label.toLowerCase(), s.key]]));
   const out: ImportRowResult[] = [];
   for (let i = 0; i < rows.length; i++) {

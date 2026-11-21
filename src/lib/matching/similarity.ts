@@ -69,9 +69,16 @@ export function lastNameSimilarity(a: NameForMatch, b: NameForMatch): number {
   return best;
 }
 
+/** "de Vries-Bakker" -> [geheel, Vries, Bakker]; "El Amrani" -> [geheel, Amrani] */
 function splitDoubleName(name: string): string[] {
+  const out = new Set<string>([name]);
   const parts = name.split(/\s*-\s*/).filter(Boolean);
-  return parts.length > 1 ? [name, ...parts] : [name];
+  if (parts.length > 1) parts.forEach((p) => out.add(p));
+  for (const p of [name, ...parts]) {
+    const words = p.split(/\s+/).filter(Boolean);
+    if (words.length > 1) out.add(words[words.length - 1]);
+  }
+  return [...out];
 }
 
 function singleSimilarity(a: string, b: string): number {

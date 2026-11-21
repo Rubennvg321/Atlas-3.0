@@ -145,6 +145,13 @@ export const trajects = pgTable(
     siteCity: text("site_city"),
     source: text("source"),
     referral: text("referral"),
+    /** Handmatige verkoopprijs excl. btw, alleen gebruikt zolang er geen WeFact-offerte is. */
+    saleAmountExclManual: numeric("sale_amount_excl_manual", { precision: 12, scale: 2 }),
+    /** Handmatig aantal montagedagen (leeg = afgeleid uit de rode agenda-afspraken). */
+    montageDaysManual: integer("montage_days_manual"),
+    reviewRequestedAt: timestamp("review_requested_at", { withTimezone: true }),
+    reviewReminderAt: timestamp("review_reminder_at", { withTimezone: true }),
+    reviewReceivedAt: timestamp("review_received_at", { withTimezone: true }),
     /** Optimistische vergrendeling: voorkomt dat twee apparaten elkaar overschrijven. */
     version: integer("version").notNull().default(1),
     createdAt: createdAt(),
@@ -210,6 +217,7 @@ export const appointments = pgTable(
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
     location: text("location"),
+    allDay: boolean("all_day").notNull().default(false),
     status: text("status").notNull().default("gepland"), // gepland | geannuleerd
     googleCalendarId: text("google_calendar_id"),
     googleEventId: text("google_event_id"),
@@ -246,6 +254,33 @@ export const quotes = pgTable(
     uniqueIndex("quotes_wefact_uq").on(t.wefactId).where(sql`${t.wefactId} is not null`),
     index("quotes_traject_idx").on(t.trajectId),
     index("quotes_number_idx").on(t.number),
+  ],
+);
+
+/** Inkooporders bij leveranciers (PPC, fedi, ...), uit orderbevestigingen in Gmail of handmatig. */
+export const purchaseOrders = pgTable(
+  "purchase_orders",
+  {
+    id: id(),
+    trajectId: uuid("traject_id").references(() => trajects.id),
+    customerId: uuid("customer_id").references(() => customers.id),
+    supplier: text("supplier").notNull(), // PPC | fedi | ...
+    orderNumber: text("order_number"),
+    commission: text("commission"), // "Fam. Hoedemaker" — gebruikt om aan de klant te koppelen
+    amountExcl: numeric("amount_excl", { precision: 12, scale: 2 }).notNull(),
+    orderDate: timestamp("order_date", { withTimezone: true }),
+    source: text("source").notNull().default("handmatig"), // gmail | handmatig
+    gmailMessageId: text("gmail_message_id"),
+    /** gekoppeld | te_koppelen (geen of meerdere passende trajecten gevonden) */
+    status: text("status").notNull().default("gekoppeld"),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: createdAt(),
+    deletedAt: deletedAt(),
+  },
+  (t) => [
+    uniqueIndex("purchase_orders_supplier_order_uq").on(t.supplier, t.orderNumber).where(sql`${t.orderNumber} is not null`),
+    index("purchase_orders_traject_idx").on(t.trajectId),
+    index("purchase_orders_status_idx").on(t.status),
   ],
 );
 

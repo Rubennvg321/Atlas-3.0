@@ -94,6 +94,9 @@ describe("splitDutchName", () => {
     ["Anne-Marie in 't Veld", { firstName: "Anne-Marie", infix: "in 't", lastName: "Veld" }],
     ["Dhr. P. de Groot", { firstName: "P.", infix: "de", lastName: "Groot" }],
     ["Jansen", { firstName: null, infix: null, lastName: "Jansen" }],
+    ["Fatima El Amrani", { firstName: "Fatima", infix: null, lastName: "El Amrani" }],
+    ["Mohamed Ben Ali", { firstName: "Mohamed", infix: null, lastName: "Ben Ali" }],
+    ["fam. El Idrissi", { firstName: null, infix: null, lastName: "El Idrissi" }],
   ])("%s", (input, out) => expect(splitDutchName(input)).toEqual(out));
 });
 

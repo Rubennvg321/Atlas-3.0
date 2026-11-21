@@ -89,6 +89,17 @@ describe("Google Agenda", () => {
     expect(classifyEvent({ summary: "Advies gesprek Steps&Stairs", colorId: "9", location: null, attendees: [] }, RULES).kind).toBe("overig");
     expect(classifyEvent({ summary: "Tandarts", colorId: "11", location: null, attendees: [] }, RULES).kind).toBe("overig");
   });
+  it("afspraak zonder eigen kleur (kleur van de agenda) telt mee", () => {
+    expect(classifyEvent({ summary: "Advies gesprek Steps&Stairs", colorId: null, location: "Kerkstraat 12", attendees: [] }, RULES).kind).toBe("advies");
+    expect(classifyEvent({ summary: "Fam. Jansen, Kerkstraat 12", colorId: null, location: null, attendees: [] }, RULES).kind).toBe("montage");
+    expect(classifyEvent({ summary: "Tandarts", colorId: null, location: null, attendees: [] }, RULES).kind).toBe("overig");
+  });
+  it("titelvarianten van een adviesgesprek worden herkend", () => {
+    for (const t of ["Adviesgesprek Steps&Stairs", "Advies gesprek Step&Stairs", "HPL/PVC Advies gesprek Steps&Stairs", "advies gesprek"]) {
+      expect(classifyEvent({ summary: t, colorId: null, location: null, attendees: [] }, RULES).kind, t).toBe("advies");
+    }
+    expect(classifyEvent({ summary: "Offerte", colorId: null, location: null, attendees: [] }, RULES).kind).toBe("overig");
+  });
   it("locatie in verschillende vormen", () => {
     expect(parseLocation("Tintorettohof 8 6663PP Lent")).toMatchObject({ street: "Tintorettohof", houseNumber: 8, postcode: "6663PP", city: "Lent" });
     expect(parseLocation("")).toBeNull();

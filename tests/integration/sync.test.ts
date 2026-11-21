@@ -12,7 +12,7 @@ import { getTrajectFinance } from "@/server/finance";
 import { intakeLead } from "@/server/intake";
 import { changeStage } from "@/server/trajects";
 import { setSetting } from "@/server/settings";
-import { getIntegration, runTracked } from "@/server/integrations/state";
+import { getIntegration, runTracked, upsertIntegration } from "@/server/integrations/state";
 import { DEFAULT_SETTINGS } from "@/lib/settings-defaults";
 import { db, lead, resetDb, uid } from "./helpers";
 import { OWN, fakeCalendar, fakeGmail, fakeWefact } from "./fakes";
@@ -132,7 +132,7 @@ describe("Google Agenda", () => {
     expect(a.trajectId).toBe(r.trajectId);
     expect(a.kind).toBe("advies");
     expect(await stageOf(r.trajectId!)).toBe("offerte_gepland");
-    expect((await getIntegration(db(), "google_calendar"))?.config).toMatchObject({ syncToken: "tok-1" });
+    expect((await getIntegration(db(), "google_calendar"))?.config).toMatchObject({ syncTokens: { primary: "tok-1" } });
   });
 
   it("rode montage 'Fam. Jansen Kerkstraat 12' wordt herkend; meerdaagse montage telt als montagedagen", async () => {
@@ -162,9 +162,35 @@ describe("Google Agenda", () => {
     const cal = fakeCalendar([advies("e1", "a@example.nl", ""), advies("e2", "b@example.nl", "")]);
     cal.failAfter(1);
     await expect(syncCalendar(db(), cal)).rejects.toThrow();
-    expect((await getIntegration(db(), "google_calendar"))?.config ?? {}).not.toMatchObject({ syncToken: "tok-fail" });
+    expect((await getIntegration(db(), "google_calendar"))?.config ?? {}).not.toMatchObject({ syncTokens: { primary: "tok-fail" } });
     await syncCalendar(db(), cal);
     expect(await db().select().from(appointments)).toHaveLength(2);
+  });
+
+  it("adviesgesprek in de agenda 'Offerte' (zonder eigen kleur) wordt gekoppeld", async () => {
+    const r = await intakeLead(db(), lead({ name: "Katharina Klein", email: "katharina@example.nl" }), { provider: "website", externalId: uid() });
+    const offerte = "offerte-agenda@example.nl";
+    await setSetting(db(), "calendarRules", { calendars: [{ id: "primary", name: "Werk" }, { id: offerte, name: "Offerte" }] });
+    const ev = { ...advies("o1", "katharina@example.nl", "Tintorettohof 8"), colorId: undefined, summary: "Adviesgesprek Steps&Stairs" };
+    const cal = fakeCalendar([]);
+    cal.changes = async ({ calendarId = "primary" } = {}) => ({ events: calendarId === offerte ? [ev] : [], nextSyncToken: `tok-${calendarId}` });
+    expect(await syncCalendar(db(), cal)).toBe(1);
+    const [a] = await db().select().from(appointments);
+    expect(a.googleCalendarId).toBe(offerte);
+    expect(a.trajectId).toBe(r.trajectId);
+    expect((await getIntegration(db(), "google_calendar"))?.config).toMatchObject({ syncTokens: { primary: "tok-primary", [offerte]: `tok-${offerte}` } });
+  });
+
+  it("oude sync-token van vóór de nieuwe regels wordt genegeerd: alles wordt opnieuw gelezen", async () => {
+    await upsertIntegration(db(), "google_calendar", { config: { syncToken: "oud" } });
+    const seen: unknown[] = [];
+    const cal = fakeCalendar([]);
+    cal.changes = async (opts = {}) => {
+      seen.push(opts);
+      return { events: [], nextSyncToken: "nieuw" };
+    };
+    await syncCalendar(db(), cal);
+    expect(seen.every((o) => !(o as { syncToken?: string }).syncToken)).toBe(true);
   });
 
   it("andere afspraken (verkeerde kleur) worden niet opgeslagen", async () => {

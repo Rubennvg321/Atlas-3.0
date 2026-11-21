@@ -89,7 +89,9 @@ export function fakeCalendar(events: CalendarEvent[]) {
     failAfter(n) {
       failAt = n;
     },
-    async changes() {
+    async changes({ calendarId = "primary" } = {}) {
+      // Nagebootst: alle testafspraken staan in de hoofdagenda.
+      if (calendarId !== "primary") return { events: [], nextSyncToken: `tok-${calendarId}` };
       if (failAt !== null) {
         const n = failAt;
         failAt = null;

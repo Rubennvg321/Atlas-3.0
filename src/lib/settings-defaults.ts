@@ -61,6 +61,8 @@ export const DEFAULT_SETTINGS = {
   },
   /** Dagen zonder volgende actie waarna een kaart opvalt. */
   board: { staleAfterDays: 7 },
+  /** Dashboard: omzetdoel per maand (excl. btw). 0 = geen doel. */
+  dashboard: { monthlyRevenueTarget: 0 as number },
 } as const;
 
 export type SettingsShape = typeof DEFAULT_SETTINGS;

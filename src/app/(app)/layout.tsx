@@ -20,7 +20,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <>
       <Nav duplicateCount={counts?.dups ?? 0} overdueCount={counts?.overdue ?? 0} />
-      <main className="mx-auto max-w-[1600px] px-3 pb-28 pt-4 md:px-4 md:pb-10">{children}</main>
+      <div className="md:pl-56">
+        <main className="mx-auto max-w-[1600px] px-3 pb-28 pt-4 md:px-6 md:pb-10 md:pt-6">{children}</main>
+      </div>
     </>
   );
 }

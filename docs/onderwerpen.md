@@ -54,8 +54,15 @@ Status, fouten, opnieuw proberen, tokens, worker.
 `src/app/(app)/koppelingen/`, `src/server/integrations/state.ts`, `google-oauth.ts`, `src/worker/index.ts`,
 `src/server/crypto.ts`. Logboek op de server: `docker compose -f /opt/atlas/docker-compose.yml logs --tail 50 worker`
 
-## 11. Dashboard en rapportages (nog te bouwen)
-*"Ik wil beginnen aan het dashboard (orderportefeuille, conversie, doorlooptijd, montageplanning)."*
+## 11. Dashboard en widgets
+*"Ik wil iets aanpassen aan het dashboard of een widget toevoegen."*
+Widget "Bedrijfsstand" (omzet maand/jaar, geplande omzet, nieuwe leads, akkoord, montages), omzetdoel in Instellingen.
+Ideeën: conversie, doorlooptijd, montageplanning. Nieuwe widget = nieuw bestand in `src/components/widgets/`.
+`src/app/(app)/dashboard/`, `src/server/dashboard.ts`, `src/components/widgets/`
+
+## 11b. Zijbalk en indeling van Atlas
+*"Ik wil een onderdeel toevoegen aan de zijbalk."*
+`src/components/nav.tsx` (lijst `SECTIONS`), `src/app/(app)/layout.tsx`
 
 ## 12. Import van bestaande klanten
 *"Ik wil bestaande klanten importeren."*

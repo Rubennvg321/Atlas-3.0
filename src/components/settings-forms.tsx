@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { saveAutomationAction, saveMatchingAction, saveStagesAction } from "@/app/actions";
+import { saveAutomationAction, saveDashboardAction, saveMatchingAction, saveStagesAction } from "@/app/actions";
 import type { MatchSettings } from "@/lib/matching/score";
 import { Field, FormMessage, Input, Select, SubmitButton } from "./ui";
 
@@ -85,6 +85,22 @@ export function AutomationForm({ a, events }: { a: Record<string, string>; event
         </Field>
       ))}
       <p className="text-xs text-stone-500">Kaarten gaan alleen vooruit, nooit terug en nooit uit &lsquo;Vervallen&rsquo;.</p>
+      <FormMessage state={state} />
+      <div className="flex items-center gap-3">
+        <SubmitButton>Opslaan</SubmitButton>
+        <Saved state={state} />
+      </div>
+    </form>
+  );
+}
+
+export function DashboardForm({ monthlyRevenueTarget }: { monthlyRevenueTarget: number }) {
+  const [state, action] = useActionState(saveDashboardAction, null);
+  return (
+    <form action={action} className="space-y-3">
+      <Field label="Omzetdoel per maand (€, excl. btw — leeg of 0 = geen doel)">
+        <Input name="monthlyRevenueTarget" inputMode="decimal" defaultValue={monthlyRevenueTarget ? String(monthlyRevenueTarget).replace(".", ",") : ""} placeholder="bijv. 37.000" />
+      </Field>
       <FormMessage state={state} />
       <div className="flex items-center gap-3">
         <SubmitButton>Opslaan</SubmitButton>

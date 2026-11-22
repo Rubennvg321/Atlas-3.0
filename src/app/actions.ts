@@ -380,6 +380,17 @@ export async function saveAutomationAction(_prev: ActionResult | null, fd: FormD
   });
 }
 
+export async function saveDashboardAction(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  const user = await requireUser();
+  return run(async () => {
+    const target = euroInput(str(fd, "monthlyRevenueTarget")) ?? 0;
+    if (target < 0) throw new DomainError("Het omzetdoel kan niet negatief zijn.");
+    await setSetting(getDb(), "dashboard", { monthlyRevenueTarget: target }, user.id);
+    revalidatePath("/instellingen");
+    revalidatePath("/dashboard");
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Financieel, inkoop en voorstellen
 // ---------------------------------------------------------------------------

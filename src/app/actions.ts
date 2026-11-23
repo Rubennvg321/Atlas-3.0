@@ -14,7 +14,7 @@ import { markNotSame, mergeCustomers, undoMerge } from "@/server/merge";
 import { addContact, addContactPoint, anonymizeCustomer, removeContact, removeContactPoint, updateCustomer } from "@/server/customer-edit";
 import { commitImport, previewImport, type ImportSummary } from "@/server/import";
 import { setSetting } from "@/server/settings";
-import { duplicateCandidates, pipelineStages, quotes } from "@/db/schema";
+import { duplicateCandidates, pipelineStages, quotes, trajects } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { normalizeAddition, normalizePostcode, tidyCity } from "@/lib/normalize";
 import { EVENT_TARGET } from "@/lib/stage-rules";
@@ -584,4 +584,26 @@ export async function linkQuoteAction(_prev: ActionResult | null, fd: FormData):
   revalidatePath("/bord");
   revalidatePath("/taken");
   return res;
+}
+
+// ---------------------------------------------------------------------------
+// Agenda-afspraak zonder klant aan een bestaand traject koppelen
+// ---------------------------------------------------------------------------
+
+export async function linkAppointmentAction(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  await requireUser();
+  const appointmentId = str(fd, "appointmentId");
+  const trajectId = str(fd, "trajectId");
+  const res = await run(async () => {
+    if (!appointmentId || !trajectId) throw new DomainError("Kies het traject.");
+    const db = getDb();
+    const [t] = await db.select().from(trajects).where(eq(trajects.id, trajectId));
+    if (!t || t.deletedAt) throw new DomainError("Traject niet gevonden.");
+    const done = await linkAppointmentToCustomer(db, appointmentId, t.customerId, t.id);
+    if (!done) throw new DomainError("Deze afspraak is inmiddels al gekoppeld.");
+  });
+  revalidatePath("/dashboard");
+  revalidatePath("/bord");
+  if (trajectId) revalidatePath(`/trajecten/${trajectId}`);
+  return res.ok ? { ok: true } : res;
 }

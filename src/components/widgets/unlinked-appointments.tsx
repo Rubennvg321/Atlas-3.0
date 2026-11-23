@@ -1,8 +1,9 @@
 import Link from "next/link";
 import type { UnlinkedAppointment } from "@/server/dashboard";
+import { LinkAppointmentForm } from "../link-appointment";
 
 /** Widget "Afspraken zonder klant": agenda-afspraken die Atlas niet aan een klant kon koppelen. */
-export function UnlinkedAppointmentsWidget({ items }: { items: UnlinkedAppointment[] }) {
+export function UnlinkedAppointmentsWidget({ items, trajectOptions = [] }: { items: UnlinkedAppointment[]; trajectOptions?: { id: string; label: string }[] }) {
   return (
     <section className="rounded-2xl border border-stone-200 bg-white p-4 md:p-5">
       <div className="mb-1 flex items-baseline justify-between gap-2">
@@ -10,7 +11,7 @@ export function UnlinkedAppointmentsWidget({ items }: { items: UnlinkedAppointme
         <span className="text-sm text-stone-500">{items.length}</span>
       </div>
       <p className="mb-3 text-sm text-stone-500">
-        Deze afspraken staan in je agenda, maar Atlas kon ze aan geen klant koppelen. Met &lsquo;Klant aanmaken&rsquo; maak je de klant aan en koppelt Atlas de afspraak er meteen aan. Bestaat de klant al, dan herkent Atlas dat en koppelt hij de afspraak aan die klant.
+        Deze afspraken staan in je agenda, maar Atlas kon ze aan geen klant koppelen. Komt de klant later in Atlas, dan koppelt Atlas de afspraak vanzelf (binnen enkele minuten). Staat de klant er al maar herkent Atlas hem niet, kies dan het traject bij &lsquo;Koppelen aan…&rsquo;. Nieuwe klant? Gebruik &lsquo;Klant aanmaken&rsquo;.
       </p>
       {items.length === 0 ? (
         <p className="text-sm text-emerald-700">Alles is gekoppeld.</p>
@@ -28,6 +29,7 @@ export function UnlinkedAppointmentsWidget({ items }: { items: UnlinkedAppointme
                 {a.title}
                 {a.location && <span className="font-normal text-stone-500"> · {a.location}</span>}
               </span>
+              <LinkAppointmentForm appointmentId={a.id} options={trajectOptions} />
               <Link href={`/klanten/nieuw?${new URLSearchParams(a.prefill)}`} className="rounded-lg border border-stone-300 px-2.5 py-1 text-sm hover:bg-stone-50">
                 Klant aanmaken
               </Link>

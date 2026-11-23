@@ -1,7 +1,7 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import type { DbOrTx } from "@/db";
 import { appointments } from "@/db/schema";
-import { classifyEvent, type ParsedAddress } from "@/lib/parsers/calendar";
+import { classifyEvent, parseLocation, parseMontageTitle, type ParsedAddress } from "@/lib/parsers/calendar";
 import { scoreMatch, type MatchProfile } from "@/lib/matching/score";
 import { splitDutchName, streetKey } from "@/lib/normalize";
 import type { LeadInput } from "@/lib/intake/types";
@@ -22,7 +22,7 @@ import { cfg, getIntegration, upsertIntegration } from "./state";
  * afspraken (vanaf 30 dagen terug) opnieuw in plaats van alleen wijzigingen,
  * zodat afspraken die eerder gemist zijn alsnog worden herkend.
  */
-const RULES_VERSION = 3;
+const RULES_VERSION = 4; // 4: e-mailadressen van gasten bewaren, losse afspraken later alsnog koppelen
 /** Zo ver terug leest Atlas de agenda bij een volledige ronde (voor al uitgevoerde montages). */
 const LOOKBACK_DAYS = 120;
 /** Oudere adviesgesprekken maken geen nieuwe klant/lead meer aan; ze worden alleen gekoppeld. */
@@ -85,6 +85,19 @@ async function matchMontage(db: DbOrTx, cands: { name: string; street: string | 
   return null;
 }
 
+/**
+ * Adviesgesprek: welke bestaande klant hoort bij deze gasten/dit adres? Maakt zelf
+ * geen klant aan. Een uitnodiging naar het e-mailadres van precies één bekende klant
+ * telt als zeker.
+ */
+async function matchAdvies(db: DbOrTx, emails: string[], address: ParsedAddress | null): Promise<string | null> {
+  if (!emails.length && !address?.postcode && !address?.street) return null;
+  const m = await matchProfile(db, { emails, phones: [], ...addressProfile(address), names: [] });
+  if (m.decision === "auto" && m.best) return m.best.customerId;
+  if (m.decision === "doubt" && m.doubts.length === 1 && m.doubts[0].result.signals.some((x) => x.key === "email")) return m.doubts[0].customerId;
+  return null;
+}
+
 export async function processEvent(db: DbOrTx, e: CalendarEvent, own: string[], calendarId = "primary"): Promise<boolean> {
   const rules = await getSetting(db, "calendarRules");
   const [existing] = await db.select().from(appointments).where(and(eq(appointments.googleCalendarId, calendarId), eq(appointments.googleEventId, e.id)));
@@ -110,12 +123,13 @@ export async function processEvent(db: DbOrTx, e: CalendarEvent, own: string[], 
   }
 
   const { startsAt, endsAt, allDay } = times(e);
+  const attendeeEmails = cls.kind === "advies" ? cls.emails : [];
   if (existing && existing.customerId) {
     // Bestaande afspraak: tijd/locatie bijwerken (Google is leidend), koppeling behouden.
     if (existing.googleEtag === e.etag && existing.status === "gepland") return false;
     await db
       .update(appointments)
-      .set({ title: e.summary ?? existing.title, startsAt, endsAt, allDay, location: e.location ?? null, status: "gepland", googleEtag: e.etag ?? null, updatedAt: new Date() })
+      .set({ title: e.summary ?? existing.title, startsAt, endsAt, allDay, location: e.location ?? null, attendeeEmails, status: "gepland", googleEtag: e.etag ?? null, updatedAt: new Date() })
       .where(eq(appointments.id, existing.id));
     if (existing.trajectId) await applyStageEvent(db, existing.trajectId, cls.kind === "advies" ? "adviesgesprek_gepland" : "montage_gepland", { refType: "appointment", refId: e.id });
     return true;
@@ -136,18 +150,10 @@ export async function processEvent(db: DbOrTx, e: CalendarEvent, own: string[], 
       city: cls.address?.city ?? null,
     };
     const stale = endsAt.getTime() < Date.now() - NEW_LEAD_MAX_AGE_DAYS * 86400000;
-    if (!lead.emails.length && !lead.postcode && !lead.street) {
-      customerId = null;
-    } else {
-      const m = await matchProfile(db, { emails: lead.emails, phones: [], ...addressProfile(cls.address), names: [] });
-      if (m.decision === "auto" && m.best) customerId = m.best.customerId;
-      // Uitnodiging naar het e-mailadres van precies één bekende klant: dat ís die klant.
-      else if (m.decision === "doubt" && m.doubts.length === 1 && m.doubts[0].result.signals.some((x) => x.key === "email"))
-        customerId = m.doubts[0].customerId;
-      else if (!stale) {
-        const r = await intakeLead(db, lead, { provider: "agenda", externalId: `gcal:${e.id}`, traject: "none" });
-        customerId = r.customerId;
-      }
+    customerId = await matchAdvies(db, cls.emails, cls.address);
+    if (!customerId && !stale && (lead.emails.length || lead.postcode || lead.street)) {
+      const r = await intakeLead(db, lead, { provider: "agenda", externalId: `gcal:${e.id}`, traject: "none" });
+      customerId = r.customerId;
     }
   } else {
     const m = await matchMontage(db, cls.nameCandidates, cls.address);
@@ -158,10 +164,10 @@ export async function processEvent(db: DbOrTx, e: CalendarEvent, own: string[], 
   const trajectId = montageTraject ?? (customerId ? await trajectFor(db, customerId) : null);
   if (existing) {
     // Eerder opgeslagen zonder klant: nu opnieuw geprobeerd te koppelen.
-    if (!customerId && existing.googleEtag === e.etag && existing.status === "gepland") return false;
+    if (!customerId && existing.googleEtag === e.etag && existing.status === "gepland" && existing.attendeeEmails.join() === attendeeEmails.join()) return false;
     await db
       .update(appointments)
-      .set({ trajectId, customerId, kind: cls.kind, title: e.summary ?? existing.title, startsAt, endsAt, allDay, location: e.location ?? null, status: "gepland", googleEtag: e.etag ?? null, updatedAt: new Date() })
+      .set({ trajectId, customerId, kind: cls.kind, title: e.summary ?? existing.title, startsAt, endsAt, allDay, location: e.location ?? null, attendeeEmails, status: "gepland", googleEtag: e.etag ?? null, updatedAt: new Date() })
       .where(eq(appointments.id, existing.id));
   } else await db
     .insert(appointments)
@@ -174,6 +180,7 @@ export async function processEvent(db: DbOrTx, e: CalendarEvent, own: string[], 
       endsAt,
       allDay,
       location: e.location ?? null,
+      attendeeEmails,
       googleCalendarId: calendarId,
       googleEventId: e.id,
       googleEtag: e.etag ?? null,
@@ -231,6 +238,44 @@ export async function syncCalendar(db: DbOrTx, cal: CalendarClient): Promise<num
         config: { ...latest, syncToken: undefined, rulesVersion: RULES_VERSION, syncTokens: { ...kept, [calendarId]: page.nextSyncToken } },
       });
     }
+  }
+  // Afspraken die eerder zonder klant zijn opgeslagen: is de klant er inmiddels wel?
+  n += await relinkUnlinkedAppointments(db);
+  return n;
+}
+
+/**
+ * Probeert opgeslagen afspraken zonder klant opnieuw te koppelen, met de bewaarde
+ * titel, locatie en gast-e-mailadressen. Nodig omdat een ongewijzigde afspraak niet
+ * opnieuw uit Google komt: komt de klant later in Atlas (aanvraag, WeFact, handmatig),
+ * dan wordt de afspraak zo alsnog gekoppeld. Maakt zelf geen klanten aan.
+ */
+export async function relinkUnlinkedAppointments(db: DbOrTx, now: Date = new Date()): Promise<number> {
+  const loose = await db
+    .select()
+    .from(appointments)
+    .where(
+      and(
+        isNull(appointments.customerId),
+        isNull(appointments.deletedAt),
+        eq(appointments.status, "gepland"),
+        inArray(appointments.kind, ["advies", "montage"]),
+        gt(appointments.endsAt, new Date(now.getTime() - LOOKBACK_DAYS * 86400000)),
+      ),
+    );
+  let n = 0;
+  for (const a of loose) {
+    const address = parseLocation(a.location);
+    let customerId: string | null = null;
+    let trajectId: string | null = null;
+    if (a.kind === "advies") {
+      customerId = await matchAdvies(db, a.attendeeEmails, address);
+    } else {
+      const m = await matchMontage(db, parseMontageTitle(a.title), address);
+      customerId = m?.customerId ?? null;
+      trajectId = m?.trajectId ?? null;
+    }
+    if (customerId && (await linkAppointmentToCustomer(db, a.id, customerId, trajectId))) n++;
   }
   return n;
 }

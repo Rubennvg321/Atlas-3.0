@@ -1,0 +1,1 @@
+ALTER TABLE "appointments" ADD COLUMN "attendee_emails" text[] DEFAULT '{}'::text[] NOT NULL;

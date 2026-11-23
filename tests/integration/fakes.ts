@@ -124,6 +124,9 @@ export function fakeWefact(quotes: WefactQuote[], debtors: WefactDebtor[]): Wefa
     async debtor(code) {
       return debtors.find((d) => d.DebtorCode === code) ?? null;
     },
+    async quoteByCode(code) {
+      return quotes.find((x) => x.PriceQuoteCode.toLowerCase() === code.toLowerCase()) ?? null;
+    },
     async downloadQuote(ref) {
       const q = quotes.find((x) => (ref.identifier ? x.Identifier === ref.identifier : x.PriceQuoteCode === ref.code));
       return q ? { filename: `${q.PriceQuoteCode}.pdf`, pdf: Buffer.from(`%PDF-1.4 offerte ${q.PriceQuoteCode}`) } : null;

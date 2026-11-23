@@ -29,6 +29,8 @@ export interface WefactDebtor {
 export interface WefactClient {
   listQuotes(offset: number, limit: number): Promise<{ quotes: WefactQuote[]; total: number }>;
   debtor(code: string): Promise<WefactDebtor | null>;
+  /** Eén offerte op offertenummer (bv. "OF2026-0076"); null als WeFact hem niet kent. */
+  quoteByCode(code: string): Promise<WefactQuote | null>;
   /** De PDF van een offerte, zoals WeFact hem naar de klant stuurt. */
   downloadQuote(ref: { identifier?: string | null; code?: string | null }): Promise<{ filename: string; pdf: Buffer } | null>;
 }
@@ -62,6 +64,16 @@ export function liveWefact(apiKey: string): WefactClient {
         return r.debtor ?? null;
       } catch {
         return null;
+      }
+    },
+    async quoteByCode(code) {
+      try {
+        const r = await call<{ pricequote?: WefactQuote }>({ controller: "pricequote", action: "show", PriceQuoteCode: code });
+        return r.pricequote?.Identifier ? r.pricequote : null;
+      } catch (e) {
+        // "Niet gevonden" is geen storing; andere fouten (whitelist, sleutel) wel doorgeven.
+        if (/niet gevonden|not found|bestaat niet|ongeldig|invalid|unknown/i.test((e as Error).message)) return null;
+        throw e;
       }
     },
     async downloadQuote(ref) {

@@ -7,12 +7,15 @@ import { TaskItem } from "@/components/traject-client";
 import { euro, isoDay } from "@/lib/format";
 import { unlinkedPurchases } from "@/server/purchases";
 import { LinkPurchaseForm } from "@/components/link-purchase";
+import { LinkQuoteToTraject } from "@/components/link-quote";
+import { unlinkedQuotes } from "@/server/integrations/wefact-sync";
 
 export const metadata = { title: "Taken" };
 
 export default async function TasksPage() {
   const db = getDb();
   const [rows, idle, stages, unlinked] = await Promise.all([getMyTasks(db), trajectsWithoutAction(db), getStages(db), unlinkedPurchases(db)]);
+  const looseQuotes = await unlinkedQuotes(db);
   const allOpen = await openTrajectOptions(db);
   const today = isoDay(new Date());
   const weekEnd = isoDay(new Date(Date.now() + 7 * 86400000));
@@ -26,6 +29,22 @@ export default async function TasksPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <PageHeader title="Taken" />
+      {looseQuotes.length > 0 && (
+        <Card title={`Offertes te koppelen (${looseQuotes.length})`} className="border-violet-200">
+          <p className="mb-2 text-xs text-stone-500">Deze offertes uit WeFact kon Atlas niet met zekerheid aan één traject koppelen.</p>
+          <ul className="space-y-3">
+            {looseQuotes.map((q) => (
+              <li key={q.id} className="text-sm">
+                <p>
+                  <strong>{q.number ?? "Offerte"}</strong>
+                  {q.amountExcl ? ` · ${euro(q.amountExcl)} excl. btw` : ""} · {q.status}
+                </p>
+                <LinkQuoteToTraject quoteId={q.id} options={allOpen} />
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       {unlinked.length > 0 && (
         <Card title={`Inkoop te koppelen (${unlinked.length})`} className="border-orange-200">
           <p className="mb-2 text-xs text-stone-500">Atlas kon deze orderbevestigingen niet met zekerheid aan één traject koppelen.</p>

@@ -14,7 +14,7 @@ import { markNotSame, mergeCustomers, undoMerge } from "@/server/merge";
 import { addContact, addContactPoint, anonymizeCustomer, removeContact, removeContactPoint, updateCustomer } from "@/server/customer-edit";
 import { commitImport, previewImport, type ImportSummary } from "@/server/import";
 import { setSetting } from "@/server/settings";
-import { duplicateCandidates, pipelineStages } from "@/db/schema";
+import { duplicateCandidates, pipelineStages, quotes } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { normalizeAddition, normalizePostcode, tidyCity } from "@/lib/normalize";
 import { EVENT_TARGET } from "@/lib/stage-rules";
@@ -23,6 +23,7 @@ import { setManualFinance } from "@/server/finance";
 import { addManualPurchase, deletePurchase, linkPurchase } from "@/server/purchases";
 import { decideProposal } from "@/server/automation";
 import { liveWefact } from "@/server/integrations/wefact-client";
+import { getWefactClient, linkQuoteToTraject } from "@/server/integrations/wefact-sync";
 import { addPurchaseDocument, deletePurchaseDocument, validateDocument } from "@/server/purchase-documents";
 import { cfg, friendlyError, getIntegration, upsertIntegration, type Provider } from "@/server/integrations/state";
 import { encrypt } from "@/server/crypto";
@@ -558,4 +559,29 @@ export async function saveReviewSettingsAction(_prev: ActionResult | null, fd: F
   await setSetting(getDb(), "reviews", { enabled, link: link ?? "", subject: v("subject"), body: v("body"), reminderSubject: v("reminderSubject"), reminderBody: v("reminderBody") }, user.id);
   revalidatePath("/koppelingen");
   return { ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Offerte uit WeFact handmatig koppelen
+// ---------------------------------------------------------------------------
+
+export async function linkQuoteAction(_prev: ActionResult | null, fd: FormData): Promise<ActionResult<{ number: string | null }>> {
+  const user = await requireUser();
+  const trajectId = str(fd, "trajectId")!;
+  let number = str(fd, "quoteNumber");
+  const quoteId = str(fd, "quoteId");
+  const res = await run(async () => {
+    const db = getDb();
+    if (!number && quoteId) {
+      const [q] = await db.select().from(quotes).where(eq(quotes.id, quoteId));
+      number = q?.number ?? null;
+    }
+    if (!trajectId) throw new DomainError("Kies het traject.");
+    const q = await linkQuoteToTraject(db, await getWefactClient(db), trajectId, number ?? "", user.id);
+    return { number: q?.number ?? number };
+  });
+  revalidatePath(`/trajecten/${trajectId}`);
+  revalidatePath("/bord");
+  revalidatePath("/taken");
+  return res;
 }

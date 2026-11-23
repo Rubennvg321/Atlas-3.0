@@ -4,10 +4,18 @@ import { useActionState, useEffect, useRef, useState, useTransition } from "reac
 import { addContactAction, addContactPointAction, createCustomerAction, removeContactAction, removeContactPointAction, undoMergeAction, updateCustomerAction } from "@/app/actions";
 import { Button, Field, FormMessage, Input, Select, SubmitButton, Textarea } from "./ui";
 
-export function NewCustomerForm() {
+export type NewCustomerDefaults = Partial<Record<"appointmentId" | "lastName" | "postcode" | "houseNumber" | "addition" | "street" | "city" | "message", string>>;
+
+export function NewCustomerForm({ defaults = {} }: { defaults?: NewCustomerDefaults }) {
   const [state, action] = useActionState(createCustomerAction, null);
   return (
     <form action={action} className="space-y-4">
+      {defaults.appointmentId && (
+        <>
+          <input type="hidden" name="appointmentId" value={defaults.appointmentId} />
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">De agenda-afspraak wordt na het opslaan aan deze klant gekoppeld.</p>
+        </>
+      )}
       <fieldset className="grid grid-cols-6 gap-2">
         <Field label="Voornaam" className="col-span-6 sm:col-span-2">
           <Input name="firstName" autoComplete="off" />
@@ -16,7 +24,7 @@ export function NewCustomerForm() {
           <Input name="infix" placeholder="van der" autoComplete="off" />
         </Field>
         <Field label="Achternaam" className="col-span-4 sm:col-span-3">
-          <Input name="lastName" autoComplete="off" />
+          <Input name="lastName" defaultValue={defaults.lastName} autoComplete="off" />
         </Field>
       </fieldset>
       <fieldset className="grid gap-2 sm:grid-cols-2">
@@ -35,23 +43,23 @@ export function NewCustomerForm() {
       </fieldset>
       <fieldset className="grid grid-cols-6 gap-2">
         <Field label="Postcode" className="col-span-3 sm:col-span-2">
-          <Input name="postcode" placeholder="1234 AB" autoCapitalize="characters" />
+          <Input name="postcode" defaultValue={defaults.postcode} placeholder="1234 AB" autoCapitalize="characters" />
         </Field>
         <Field label="Huisnr" className="col-span-2 sm:col-span-1">
-          <Input name="houseNumber" inputMode="numeric" />
+          <Input name="houseNumber" defaultValue={defaults.houseNumber} inputMode="numeric" />
         </Field>
         <Field label="Toev." className="col-span-1">
-          <Input name="addition" />
+          <Input name="addition" defaultValue={defaults.addition} />
         </Field>
         <Field label="Straat" className="col-span-6 sm:col-span-2">
-          <Input name="street" />
+          <Input name="street" defaultValue={defaults.street} />
         </Field>
         <Field label="Plaats" className="col-span-6 sm:col-span-3">
-          <Input name="city" />
+          <Input name="city" defaultValue={defaults.city} />
         </Field>
       </fieldset>
       <Field label="Vraag / omschrijving">
-        <Textarea name="message" rows={3} />
+        <Textarea name="message" rows={3} defaultValue={defaults.message} />
       </Field>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="noTraject" /> Alleen klant opslaan (geen traject op het bord)

@@ -1,5 +1,7 @@
-import { sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/db";
+import { appointments } from "@/db/schema";
+import { parseLocation, parseMontageTitle } from "@/lib/parsers/calendar";
 import { getSetting } from "./settings";
 
 /**
@@ -88,4 +90,58 @@ export async function getBusinessStats(db: DbOrTx, now: Date = new Date()): Prom
     monthlyTarget: target,
     targetPct: target > 0 ? Math.round((revenueMonth / target) * 100) : null,
   };
+}
+
+export interface UnlinkedAppointment {
+  id: string;
+  kind: string;
+  title: string;
+  startsAt: Date;
+  allDay: boolean;
+  location: string | null;
+  /** Velden om "Nieuwe klant" alvast mee in te vullen. */
+  prefill: Record<string, string>;
+}
+
+/**
+ * Herkende agenda-afspraken (adviesgesprek of montage) die Atlas aan geen klant
+ * kon koppelen, van de afgelopen 60 dagen en later. Zo valt een klant die
+ * alleen in de agenda staat (bijv. "Fam. Pater") niet stilletjes weg.
+ */
+export async function getUnlinkedAppointments(db: DbOrTx, now: Date = new Date()): Promise<UnlinkedAppointment[]> {
+  const since = new Date(now.getTime() - 60 * 86400000);
+  const rows = await db
+    .select()
+    .from(appointments)
+    .where(
+      and(
+        isNull(appointments.customerId),
+        isNull(appointments.trajectId),
+        isNull(appointments.deletedAt),
+        eq(appointments.status, "gepland"),
+        inArray(appointments.kind, ["advies", "montage"]),
+        gte(appointments.endsAt, since),
+      ),
+    )
+    .orderBy(asc(appointments.startsAt))
+    .limit(50);
+  return rows.map((a) => {
+    const prefill: Record<string, string> = { appointmentId: a.id };
+    if (a.kind === "montage") {
+      const c = parseMontageTitle(a.title)[0];
+      if (c?.name) prefill.lastName = c.name;
+      if (c?.street) prefill.street = c.street;
+      if (c?.houseNumber) prefill.houseNumber = String(c.houseNumber);
+      if (c?.addition) prefill.addition = c.addition;
+    }
+    const loc = parseLocation(a.location);
+    if (loc?.street) prefill.street = loc.street;
+    if (loc?.houseNumber) prefill.houseNumber = String(loc.houseNumber);
+    if (loc?.addition) prefill.addition = loc.addition;
+    if (loc?.postcode) prefill.postcode = loc.postcode;
+    if (loc?.city) prefill.city = loc.city;
+    const when = a.startsAt.toLocaleDateString("nl-NL", { timeZone: "Europe/Amsterdam", dateStyle: "long" });
+    prefill.message = `${a.kind === "montage" ? "Montage" : "Adviesgesprek"} op ${when} (uit de agenda: ${a.title})`;
+    return { id: a.id, kind: a.kind, title: a.title, startsAt: a.startsAt, allDay: a.allDay, location: a.location, prefill };
+  });
 }

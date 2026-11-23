@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { DbOrTx } from "@/db";
 import { appointments } from "@/db/schema";
 import { classifyEvent, type ParsedAddress } from "@/lib/parsers/calendar";
@@ -233,4 +233,26 @@ export async function syncCalendar(db: DbOrTx, cal: CalendarClient): Promise<num
     }
   }
   return n;
+}
+
+/**
+ * Koppelt een agenda-afspraak die Atlas niet zelf kon koppelen alsnog aan een klant
+ * (bijv. via "Klant aanmaken" bij "Afspraken zonder klant" op het dashboard).
+ * Doet niets als de afspraak inmiddels al gekoppeld is. Fase alleen vooruit.
+ */
+export async function linkAppointmentToCustomer(db: DbOrTx, appointmentId: string, customerId: string, trajectId?: string | null) {
+  const [a] = await db.select().from(appointments).where(and(eq(appointments.id, appointmentId), isNull(appointments.deletedAt)));
+  if (!a || a.customerId || a.trajectId) return false;
+  const tId = trajectId ?? (await trajectFor(db, customerId));
+  await db.update(appointments).set({ customerId, trajectId: tId, updatedAt: new Date() }).where(eq(appointments.id, a.id));
+  await addTimeline(db, {
+    customerId,
+    trajectId: tId,
+    type: "afspraak",
+    title: `${a.kind === "advies" ? "Adviesgesprek" : "Montage"} gekoppeld`,
+    body: `${a.startsAt.toLocaleString("nl-NL", { timeZone: "Europe/Amsterdam", dateStyle: "full", timeStyle: a.allDay ? undefined : "short" })}${a.location ? `\n${a.location}` : ""}`,
+  });
+  if (a.status === "gepland" && (a.kind === "advies" || a.kind === "montage"))
+    await applyStageEvent(db, tId, a.kind === "advies" ? "adviesgesprek_gepland" : "montage_gepland", { refType: "appointment", refId: a.googleEventId ?? a.id });
+  return true;
 }

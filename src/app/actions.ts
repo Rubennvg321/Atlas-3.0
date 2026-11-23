@@ -26,6 +26,7 @@ import { liveWefact } from "@/server/integrations/wefact-client";
 import { cfg, friendlyError, getIntegration, upsertIntegration, type Provider } from "@/server/integrations/state";
 import { encrypt } from "@/server/crypto";
 import { audit } from "@/server/timeline";
+import { linkAppointmentToCustomer } from "@/server/integrations/calendar-sync";
 
 export type ActionResult<T = unknown> = { ok: true; data?: T } | { ok: false; error: string; conflict?: boolean };
 
@@ -108,9 +109,14 @@ export async function createCustomerAction(_prev: ActionResult | null, fd: FormD
   if (!lead.person.lastName && !lead.emails.length && !lead.phones.length) {
     return { ok: false, error: "Vul minimaal een achternaam, e-mailadres of telefoonnummer in." };
   }
-  const res = await run(() =>
-    intakeLead(getDb(), lead, { provider: "handmatig", externalId: crypto.randomUUID(), userId: user.id, traject: fd.get("noTraject") ? "none" : "lead" }),
-  );
+  const appointmentId = str(fd, "appointmentId");
+  const res = await run(async () => {
+    const db = getDb();
+    const r = await intakeLead(db, lead, { provider: "handmatig", externalId: crypto.randomUUID(), userId: user.id, traject: fd.get("noTraject") ? "none" : "lead" });
+    // Aangemaakt vanuit "Afspraken zonder klant": de agenda-afspraak meteen koppelen.
+    if (appointmentId && r.customerId) await linkAppointmentToCustomer(db, appointmentId, r.customerId, r.trajectId);
+    return r;
+  });
   if (!res.ok) return res;
   const r = res.data!;
   revalidatePath("/bord");

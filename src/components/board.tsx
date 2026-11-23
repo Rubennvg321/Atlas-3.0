@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import clsx from "clsx";
+import { sortColumnCards } from "@/lib/board-sort";
 import {
   DndContext,
   DragOverlay,
@@ -152,6 +153,7 @@ export function Board({ columns, allStages, cards: initial, lostKey }: { columns
   const byStage = useMemo(() => {
     const m = new Map<string, CardData[]>();
     for (const c of cards) m.set(c.stage, [...(m.get(c.stage) ?? []), c]);
+    for (const [k, v] of m) m.set(k, sortColumnCards(v));
     return m;
   }, [cards]);
 

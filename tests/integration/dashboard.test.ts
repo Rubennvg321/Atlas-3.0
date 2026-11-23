@@ -6,7 +6,8 @@ import { intakeLead } from "@/server/intake";
 import { changeStage } from "@/server/trajects";
 import { setManualFinance } from "@/server/finance";
 import { setSetting } from "@/server/settings";
-import { getBusinessStats } from "@/server/dashboard";
+import { getBusinessStats, getUnlinkedAppointments } from "@/server/dashboard";
+import { linkAppointmentToCustomer } from "@/server/integrations/calendar-sync";
 import { db, lead, resetDb, uid } from "./helpers";
 
 beforeEach(resetDb);
@@ -92,5 +93,38 @@ describe("dashboard: Bedrijfsstand", () => {
     expect(s.revenueMonth).toBe(4000);
     expect(s.targetPct).toBe(125);
     expect(s.montagesPlanned).toBe(1);
+  });
+});
+
+describe("dashboard: Afspraken zonder klant", () => {
+  it("toont ongekoppelde montages met voorinvulling en koppelt ze bij het aanmaken van de klant", async () => {
+    const [a] = await db()
+      .insert(appointments)
+      .values({
+        kind: "montage",
+        title: "Fam. Voorbeeld Dorpsstraat 3a",
+        startsAt: new Date("2026-12-02T08:00:00+01:00"),
+        endsAt: new Date("2026-12-02T16:00:00+01:00"),
+        location: "Dorpsstraat 3a, 6511 AB Nijmegen",
+        googleEventId: "evt-voorbeeld",
+      })
+      .returning();
+    // Oud (meer dan 60 dagen geleden) en geannuleerd: niet tonen.
+    await db().insert(appointments).values([
+      { kind: "montage", title: "Fam. Oud", startsAt: new Date("2026-08-01T08:00:00+02:00"), endsAt: new Date("2026-08-01T16:00:00+02:00") },
+      { kind: "montage", title: "Fam. Weg", startsAt: new Date("2026-12-05T08:00:00+01:00"), endsAt: new Date("2026-12-05T16:00:00+01:00"), status: "geannuleerd" },
+    ]);
+
+    const list = await getUnlinkedAppointments(db(), NOW);
+    expect(list.map((x) => x.title)).toEqual(["Fam. Voorbeeld Dorpsstraat 3a"]);
+    expect(list[0].prefill).toMatchObject({ appointmentId: a.id, lastName: "Voorbeeld", postcode: "6511AB", houseNumber: "3", city: "Nijmegen" });
+
+    const r = await intakeLead(db(), lead({ name: "Voorbeeld", postcode: "6511AB", houseNumber: 3, addition: "a" }), { provider: "handmatig", externalId: uid() });
+    expect(await linkAppointmentToCustomer(db(), a.id, r.customerId, r.trajectId)).toBe(true);
+    expect(await linkAppointmentToCustomer(db(), a.id, r.customerId, r.trajectId)).toBe(false); // idempotent
+
+    const [t] = await db().select().from(trajects).where(eq(trajects.id, r.trajectId!));
+    expect(t.stage).toBe("montage_gepland");
+    expect(await getUnlinkedAppointments(db(), NOW)).toHaveLength(0);
   });
 });

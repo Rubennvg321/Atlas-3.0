@@ -267,6 +267,8 @@ export const purchaseOrders = pgTable(
     supplier: text("supplier").notNull(), // PPC | fedi | ...
     orderNumber: text("order_number"),
     commission: text("commission"), // "Fam. Hoedemaker" — gebruikt om aan de klant te koppelen
+    /** Vrije omschrijving, bijv. "extra trapneuzen" (vooral bij handmatige extra bestellingen). */
+    description: text("description"),
     amountExcl: numeric("amount_excl", { precision: 12, scale: 2 }).notNull(),
     orderDate: timestamp("order_date", { withTimezone: true }),
     source: text("source").notNull().default("handmatig"), // gmail | handmatig

@@ -8,7 +8,8 @@ import { ContactForm, ContactPointForm, CustomerEditForm, RemoveButton, UndoMerg
 import { ConfirmAction } from "@/components/traject-client";
 import { Timeline } from "@/components/timeline";
 import { anonymizeCustomerAction, newTrajectAction } from "@/app/actions";
-import { date } from "@/lib/format";
+import { date, euro } from "@/lib/format";
+import { QuotePdfLink } from "@/components/quote-pdf-link";
 import { displayName, formatPostcode } from "@/lib/normalize";
 
 export default async function CustomerPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ melding?: string }> }) {
@@ -96,6 +97,24 @@ export default async function CustomerPage({ params, searchParams }: { params: P
               {!d.trajects.length && <li className="py-2 text-sm text-stone-500">Nog geen trajecten.</li>}
             </ul>
           </Card>
+          {d.quotes.length > 0 && (
+            <Card title="Offertes">
+              <ul className="space-y-1.5 text-sm">
+                {d.quotes.map((q) => {
+                  const t = d.trajects.find((x) => x.id === q.trajectId);
+                  return (
+                    <li key={q.id} className="flex flex-wrap items-center justify-between gap-x-2">
+                      <span>
+                        {q.number ?? "Offerte"} · {euro(q.amountExcl)} excl. btw · {q.status}
+                        {t && <span className="text-xs text-stone-500"> · traject #{t.number}</span>}
+                      </span>
+                      {(q.wefactId || q.number) && <QuotePdfLink quoteId={q.id} />}
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
+          )}
           {d.merges.length > 0 && (
             <Card title="Samengevoegd">
               <ul className="space-y-2 text-sm">

@@ -29,7 +29,8 @@ export async function getTrajectFinance(db: DbOrTx, trajectId: string) {
     .select()
     .from(purchaseOrders)
     .where(and(eq(purchaseOrders.trajectId, trajectId), isNull(purchaseOrders.deletedAt)))
-    .orderBy(desc(purchaseOrders.createdAt));
+    // Oudste eerst: de eerste is de hoofdbestelling, daarna de extra bestellingen.
+    .orderBy(sql`coalesce(${purchaseOrders.orderDate}, ${purchaseOrders.createdAt})`, purchaseOrders.createdAt);
   const purchaseExcl = pos.length ? pos.reduce((s, p) => s + Number(p.amountExcl), 0) : null;
 
   const apps = await db

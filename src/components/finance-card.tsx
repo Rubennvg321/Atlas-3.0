@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { addPurchaseAction, decideProposalAction, deletePurchaseAction, saveFinanceAction } from "@/app/actions";
-import { euroCents as euro } from "@/lib/format";
+import { date, euroCents as euro } from "@/lib/format";
 import { Button, Field, FormMessage, Input, Select, SubmitButton } from "./ui";
 
 export interface FinanceView {
@@ -17,7 +17,17 @@ export interface FinanceView {
   montageDaysManual: number | null;
   montageDates: string[];
   marginPerDay: number | null;
-  purchases: { id: string; supplier: string; orderNumber: string | null; amountExcl: string; source: string; commission: string | null }[];
+  /** Oudste eerst: de eerste is de hoofdbestelling, de rest zijn extra bestellingen. */
+  purchases: {
+    id: string;
+    supplier: string;
+    orderNumber: string | null;
+    amountExcl: string;
+    source: string;
+    commission: string | null;
+    description: string | null;
+    date: string;
+  }[];
 }
 
 function Row({ label, value, strong, tone }: { label: string; value: React.ReactNode; strong?: boolean; tone?: "pos" | "neg" }) {
@@ -29,9 +39,12 @@ function Row({ label, value, strong, tone }: { label: string; value: React.React
   );
 }
 
+const today = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" });
+
 export function FinanceCard({ trajectId, f }: { trajectId: string; f: FinanceView }) {
   const [edit, setEdit] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [supplier, setSupplier] = useState("PPC");
   const [state, action] = useActionState(saveFinanceAction, null);
   const [pState, pAction] = useActionState(addPurchaseAction, null);
   const pRef = useRef<HTMLFormElement>(null);
@@ -42,6 +55,7 @@ export function FinanceCard({ trajectId, f }: { trajectId: string; f: FinanceVie
   useEffect(() => {
     if (pState?.ok) {
       pRef.current?.reset();
+      setSupplier("PPC");
       setAddOpen(false);
     }
   }, [pState]);
@@ -64,30 +78,37 @@ export function FinanceCard({ trajectId, f }: { trajectId: string; f: FinanceVie
       <Row label="Marge per dag" strong tone={f.marginPerDay === null ? undefined : f.marginPerDay >= 0 ? "pos" : "neg"} value={f.marginPerDay !== null ? euro(f.marginPerDay) : dash} />
 
       {f.purchases.length > 0 && (
-        <ul className="mt-3 space-y-1 border-t border-stone-100 pt-2 text-xs text-stone-600">
-          {f.purchases.map((p) => (
-            <li key={p.id} className="flex items-center justify-between gap-2">
-              <span>
-                {p.supplier}
-                {p.orderNumber ? ` ${p.orderNumber}` : ""} · {euro(p.amountExcl)}
-                {p.source === "gmail" ? " · uit Gmail" : ""}
-              </span>
-              <button
-                disabled={pending}
-                className="text-stone-400 hover:text-red-600"
-                aria-label="Inkooporder verwijderen"
-                onClick={() => confirm("Deze inkooporder verwijderen?") && start(() => deletePurchaseAction(p.id, trajectId))}
-              >
-                ✕
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="mt-3 border-t border-stone-100 pt-2">
+          <p className="mb-1 text-xs font-medium text-stone-500">Bestellingen</p>
+          <ul className="space-y-1.5 text-xs text-stone-600">
+            {f.purchases.map((p, i) => (
+              <li key={p.id} className="flex items-start justify-between gap-2">
+                <span>
+                  <span className={`mr-1 rounded px-1 py-px text-[10px] font-medium ${i === 0 ? "bg-stone-200 text-stone-700" : "bg-amber-100 text-amber-800"}`}>
+                    {i === 0 ? "Hoofd" : "Extra"}
+                  </span>
+                  <span className="font-medium text-stone-800">{p.supplier}</span>
+                  {p.orderNumber ? ` ${p.orderNumber}` : ""} · {euro(p.amountExcl)} · {date(p.date)}
+                  {p.source === "gmail" ? " · automatisch uit Gmail" : " · handmatig"}
+                  {p.description && <span className="block text-stone-500">{p.description}</span>}
+                </span>
+                <button
+                  disabled={pending}
+                  className="text-stone-400 hover:text-red-600"
+                  aria-label="Bestelling verwijderen"
+                  onClick={() => confirm("Deze bestelling verwijderen?") && start(() => deletePurchaseAction(p.id, trajectId))}
+                >
+                  ✕
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => setAddOpen((v) => !v)}>
-          + Inkoop
+          {f.purchases.length ? "+ Extra bestelling" : "+ Bestelling"}
         </Button>
         <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setEdit((v) => !v)}>
           {f.hasWefactAmount ? "Montagedagen aanpassen" : "Verkoop / dagen invullen"}
@@ -97,21 +118,37 @@ export function FinanceCard({ trajectId, f }: { trajectId: string; f: FinanceVie
       {addOpen && (
         <form ref={pRef} action={pAction} className="mt-3 space-y-2 rounded-lg bg-stone-50 p-3">
           <input type="hidden" name="trajectId" value={trajectId} />
+          <p className="text-xs text-stone-500">
+            Orderbevestigingen van PPC en fedi komen automatisch uit Gmail. Hier voeg je een bestelling met de hand toe, bijvoorbeeld bij een andere leverancier.
+          </p>
           <div className="grid grid-cols-2 gap-2">
             <Field label="Leverancier">
-              <Select name="supplier" className="w-full" defaultValue="PPC">
+              <Select name="supplier" className="w-full" value={supplier} onChange={(e) => setSupplier(e.target.value)}>
                 <option>PPC</option>
                 <option>fedi</option>
-                <option>Anders</option>
+                <option value="Anders">Anders…</option>
               </Select>
             </Field>
-            <Field label="Ordernummer">
+            <Field label="Ordernummer (optioneel)">
               <Input name="orderNumber" />
             </Field>
           </div>
-          <Field label="Bedrag excl. btw">
-            <Input name="amountExcl" inputMode="decimal" placeholder="bijv. 2.344,54" required />
+          {supplier === "Anders" && (
+            <Field label="Naam leverancier">
+              <Input name="supplierOther" placeholder="bijv. Hornbach" required />
+            </Field>
+          )}
+          <Field label="Omschrijving (optioneel)">
+            <Input name="description" placeholder="bijv. 2 extra traptreden" />
           </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Bedrag excl. btw">
+              <Input name="amountExcl" inputMode="decimal" placeholder="bijv. 2.344,54" required />
+            </Field>
+            <Field label="Besteldatum">
+              <Input name="orderDate" type="date" defaultValue={today()} />
+            </Field>
+          </div>
           <FormMessage state={pState} />
           <SubmitButton>Opslaan</SubmitButton>
         </form>

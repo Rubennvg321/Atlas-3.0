@@ -12,7 +12,9 @@ import { changeStage } from "@/server/trajects";
 import { setSetting } from "@/server/settings";
 import { DEFAULT_SETTINGS } from "@/lib/settings-defaults";
 import { parsePpcOrder } from "@/lib/parsers/ppc";
+import { getQuotePdf } from "@/server/quote-pdf";
 import { db, lead, resetDb, uid } from "./helpers";
+import { fakeWefact } from "./fakes";
 
 beforeEach(resetDb);
 afterAll(closeDb);
@@ -89,6 +91,57 @@ describe("inkoop uit orderbevestigingen", () => {
     const { purchase } = await recordSupplierOrder(db(), ppc);
     expect(purchase.status).toBe("te_koppelen");
     expect(await stageOf(r.trajectId!)).toBe("review_ontvangen");
+  });
+});
+
+describe("extra bestellingen", () => {
+  const ppc = parsePpcOrder(readFileSync(path.join(__dirname, "../fixtures/ppc-orderbevestiging.txt"), "utf8"))!;
+
+  it("een tweede orderbevestiging (ander ordernummer) komt automatisch bij hetzelfde traject", async () => {
+    const r = await klant("Kees Voorbeeld", "montage_gepland");
+    await recordSupplierOrder(db(), ppc);
+    const extra = await recordSupplierOrder(db(), { ...ppc, orderNumber: `${ppc.orderNumber}-2`, amountExcl: 120 });
+    expect(extra.purchase).toMatchObject({ status: "gekoppeld", trajectId: r.trajectId });
+    const f = await getTrajectFinance(db(), r.trajectId!);
+    expect(f.purchases.map((p) => p.orderNumber)).toEqual([ppc.orderNumber, `${ppc.orderNumber}-2`]);
+  });
+
+  it("nabestelling na afronding: alleen bij een traject dat al een hoofdbestelling had", async () => {
+    const r = await klant("Kees Voorbeeld", "montage_gepland");
+    await recordSupplierOrder(db(), ppc);
+    await changeStage(db(), { trajectId: r.trajectId!, toStage: "review_gestuurd", source: "manual" });
+    const extra = await recordSupplierOrder(db(), { supplier: "fedi", orderNumber: "F-77", orderDate: null, commission: "Fam. Voorbeeld", amountExcl: 80, amountIncl: null });
+    expect(extra.purchase).toMatchObject({ status: "gekoppeld", trajectId: r.trajectId });
+    expect(await stageOf(r.trajectId!)).toBe("review_gestuurd"); // nooit terug
+  });
+
+  it("handmatig bij een andere leverancier, met omschrijving; dubbel ordernummer wordt geweigerd", async () => {
+    const r = await klant("Jan Jansen", "montage_gepland");
+    await addManualPurchase(db(), { trajectId: r.trajectId!, supplier: "ppc", orderNumber: "10", amountExcl: 1000 });
+    await addManualPurchase(db(), { trajectId: r.trajectId!, supplier: "Bouwmarkt Voorbeeld", amountExcl: 45.5, description: "lijm en schroeven" });
+    await expect(addManualPurchase(db(), { trajectId: r.trajectId!, supplier: "PPC", orderNumber: "10", amountExcl: 5 })).rejects.toThrow(/staat al in Atlas/);
+    const f = await getTrajectFinance(db(), r.trajectId!);
+    expect(f.purchases.map((p) => [p.supplier, p.description])).toEqual([
+      ["PPC", null],
+      ["Bouwmarkt Voorbeeld", "lijm en schroeven"],
+    ]);
+    expect(f.purchaseExcl).toBe(1045.5);
+  });
+});
+
+describe("offerte-PDF", () => {
+  it("haalt de PDF op bij WeFact via het WeFact-id van de offerte", async () => {
+    const r = await klant("Jan Jansen", "offerte_gemaakt");
+    const [q] = await db().insert(quotes).values({ trajectId: r.trajectId, customerId: r.customerId, wefactId: "55", number: "OF2026-0101", status: "verzonden" }).returning();
+    const wf = fakeWefact([{ Identifier: "55", PriceQuoteCode: "OF2026-0101" }], []);
+    const pdf = await getQuotePdf(db(), q.id, wf);
+    expect(pdf.filename).toBe("OF2026-0101.pdf");
+    expect(pdf.pdf.subarray(0, 4).toString()).toBe("%PDF");
+  });
+  it("geeft een duidelijke melding als WeFact niet gekoppeld is", async () => {
+    const r = await klant("Jan Jansen", "offerte_gemaakt");
+    const [q] = await db().insert(quotes).values({ trajectId: r.trajectId, customerId: r.customerId, number: "OF2026-0102", status: "verzonden" }).returning();
+    await expect(getQuotePdf(db(), q.id)).rejects.toThrow(/niet gekoppeld/);
   });
 });
 

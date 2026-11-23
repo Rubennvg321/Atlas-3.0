@@ -188,7 +188,7 @@ export async function openDuplicatesFor(db: DbOrTx, customerId: string) {
 export async function getCustomerDetail(db: DbOrTx, id: string) {
   const [customer] = await db.select().from(customers).where(eq(customers.id, id));
   if (!customer) return null;
-  const [cts, cps, trs, dups, merges, timeline] = await Promise.all([
+  const [cts, cps, trs, dups, merges, timeline, qts] = await Promise.all([
     db.select().from(contacts).where(and(eq(contacts.customerId, id), isNull(contacts.deletedAt))).orderBy(desc(contacts.isPrimary), asc(contacts.createdAt)),
     db.select().from(contactPoints).where(and(eq(contactPoints.customerId, id), isNull(contactPoints.deletedAt))).orderBy(desc(contactPoints.isPrimary), asc(contactPoints.createdAt)),
     db.select().from(trajects).where(and(eq(trajects.customerId, id), isNull(trajects.deletedAt))).orderBy(desc(trajects.createdAt)),
@@ -200,8 +200,13 @@ export async function getCustomerDetail(db: DbOrTx, id: string) {
       .where(and(eq(customerMerges.survivorId, id), isNull(customerMerges.undoneAt)))
       .orderBy(desc(customerMerges.createdAt)),
     db.select().from(timelineEvents).where(eq(timelineEvents.customerId, id)).orderBy(desc(timelineEvents.occurredAt)).limit(300),
+    db
+      .select()
+      .from(quotes)
+      .where(and(eq(quotes.customerId, id), isNull(quotes.deletedAt)))
+      .orderBy(sql`${quotes.quoteDate} desc nulls last`, desc(quotes.createdAt)),
   ]);
-  return { customer, contacts: cts, contactPoints: cps, trajects: trs, duplicates: dups, merges, timeline };
+  return { customer, contacts: cts, contactPoints: cps, trajects: trs, duplicates: dups, merges, timeline, quotes: qts };
 }
 
 export async function listCustomers(db: DbOrTx, q: string, limit = 100) {

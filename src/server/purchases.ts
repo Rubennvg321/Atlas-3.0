@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/db";
 import { contacts, customers, pipelineStages, purchaseOrders, quotes, trajects } from "@/db/schema";
 import type { SupplierOrder } from "@/lib/parsers/ppc";
@@ -14,7 +14,12 @@ import { addTimeline } from "./timeline";
  * "Familie Van Huissteden". Geeft alleen een resultaat als er precies één
  * duidelijke kandidaat is; anders moet de gebruiker kiezen.
  */
-export async function findTrajectByFamilyName(db: DbOrTx, rawName: string | null, stageKeys?: string[]): Promise<{ trajectId: string; customerId: string } | null> {
+export async function findTrajectByFamilyName(
+  db: DbOrTx,
+  rawName: string | null,
+  stageKeys?: string[],
+  opts: { stageChangedSince?: Date; withPurchase?: boolean } = {},
+): Promise<{ trajectId: string; customerId: string } | null> {
   if (!rawName) return null;
   const person = splitDutchName(rawName);
   if (!person.lastName) return null;
@@ -26,7 +31,17 @@ export async function findTrajectByFamilyName(db: DbOrTx, rawName: string | null
     .from(trajects)
     .innerJoin(customers, eq(customers.id, trajects.customerId))
     .leftJoin(contacts, and(eq(contacts.customerId, customers.id), isNull(contacts.deletedAt)))
-    .where(and(isNull(trajects.deletedAt), isNull(customers.mergedIntoId), inArray(trajects.stage, keys)));
+    .where(
+      and(
+        isNull(trajects.deletedAt),
+        isNull(customers.mergedIntoId),
+        inArray(trajects.stage, keys),
+        opts.stageChangedSince ? gte(trajects.stageChangedAt, opts.stageChangedSince) : undefined,
+        opts.withPurchase
+          ? sql`exists (select 1 from ${purchaseOrders} p where p.traject_id = ${trajects.id} and p.deleted_at is null)`
+          : undefined,
+      ),
+    );
   const hits = new Map<string, { trajectId: string; customerId: string; sim: number }>();
   for (const r of rows) {
     const fromDisplay = splitDutchName(r.displayName);
@@ -45,6 +60,26 @@ export async function findTrajectByFamilyName(db: DbOrTx, rawName: string | null
   return null;
 }
 
+/** Een extra bestelling kan ook nog komen als het traject net klaar is (review gestuurd). */
+const RECENT_DONE_DAYS = 90;
+
+/**
+ * Traject bij de commissie van een orderbevestiging: eerst lopende trajecten
+ * (ook een tweede of derde bestelling komt zo bij hetzelfde traject). Lukt dat
+ * niet, dan een traject dat in de laatste 90 dagen is afgerond én al een
+ * hoofdbestelling heeft: dan is dit een extra (na)bestelling.
+ */
+export async function matchSupplierOrder(db: DbOrTx, commission: string | null) {
+  const hit = await findTrajectByFamilyName(db, commission);
+  if (hit) return hit;
+  const doneKeys = (await db.select().from(pipelineStages).where(eq(pipelineStages.kind, "done"))).map((s) => s.key);
+  if (!doneKeys.length) return null;
+  return findTrajectByFamilyName(db, commission, doneKeys, {
+    stageChangedSince: new Date(Date.now() - RECENT_DONE_DAYS * 86400000),
+    withPurchase: true,
+  });
+}
+
 /** Legt een orderbevestiging vast (idempotent op leverancier + ordernummer) en koppelt hem als dat kan. */
 export async function recordSupplierOrder(db: DbOrTx, order: SupplierOrder, opts: { gmailMessageId?: string | null; source?: string } = {}) {
   const amount = order.amountExcl;
@@ -57,7 +92,7 @@ export async function recordSupplierOrder(db: DbOrTx, order: SupplierOrder, opts
         .where(and(eq(purchaseOrders.supplier, order.supplier), eq(purchaseOrders.orderNumber, order.orderNumber)));
       if (existing) return { purchase: existing, created: false };
     }
-    const match = await findTrajectByFamilyName(tx, order.commission);
+    const match = await matchSupplierOrder(tx, order.commission);
     const [p] = await tx
       .insert(purchaseOrders)
       .values({
@@ -85,7 +120,7 @@ async function afterLink(tx: DbOrTx, purchaseId: string, trajectId: string, cust
     trajectId,
     type: "inkoop",
     title: `Inkoop ${p.supplier}${p.orderNumber ? ` ${p.orderNumber}` : ""}: € ${Number(p.amountExcl).toLocaleString("nl-NL", { minimumFractionDigits: 2 })} excl. btw`,
-    body: p.commission ? `Commissie: ${p.commission}` : null,
+    body: [p.description, p.commission ? `Commissie: ${p.commission}` : null].filter(Boolean).join("\n") || null,
     actorUserId: userId,
   });
   await applyStageEvent(tx, trajectId, "materiaal_besteld", { refType: "purchase_order", refId: purchaseId, detail: `${p.supplier}${p.orderNumber ? ` ${p.orderNumber}` : ""}` });
@@ -93,21 +128,40 @@ async function afterLink(tx: DbOrTx, purchaseId: string, trajectId: string, cust
 
 export async function addManualPurchase(
   db: DbOrTx,
-  input: { trajectId: string; supplier: string; orderNumber?: string | null; amountExcl: number; userId?: string | null },
+  input: {
+    trajectId: string;
+    supplier: string;
+    orderNumber?: string | null;
+    amountExcl: number;
+    description?: string | null;
+    orderDate?: Date | null;
+    userId?: string | null;
+  },
 ) {
-  if (!input.supplier.trim()) throw new DomainError("Vul een leverancier in.");
+  const supplier = normalizeSupplier(input.supplier);
+  if (!supplier) throw new DomainError("Vul een leverancier in.");
   if (!(input.amountExcl > 0)) throw new DomainError("Vul een bedrag excl. btw in.");
+  const orderNumber = input.orderNumber?.trim() || null;
   return db.transaction(async (tx) => {
     const [t] = await tx.select().from(trajects).where(eq(trajects.id, input.trajectId));
     if (!t) throw new NotFoundError("Traject");
+    if (orderNumber) {
+      const [dup] = await tx
+        .select()
+        .from(purchaseOrders)
+        .where(and(eq(purchaseOrders.supplier, supplier), eq(purchaseOrders.orderNumber, orderNumber), isNull(purchaseOrders.deletedAt)));
+      if (dup) throw new DomainError(`Bestelling ${supplier} ${orderNumber} staat al in Atlas${dup.trajectId === t.id ? " bij dit traject" : ""}.`);
+    }
     const [p] = await tx
       .insert(purchaseOrders)
       .values({
         trajectId: t.id,
         customerId: t.customerId,
-        supplier: input.supplier.trim(),
-        orderNumber: input.orderNumber?.trim() || null,
+        supplier,
+        orderNumber,
         amountExcl: input.amountExcl.toFixed(2),
+        description: input.description?.trim() || null,
+        orderDate: input.orderDate ?? null,
         source: "handmatig",
         status: "gekoppeld",
         createdBy: input.userId ?? null,
@@ -116,6 +170,14 @@ export async function addManualPurchase(
     await afterLink(tx, p.id, t.id, t.customerId, input.userId ?? null);
     return p;
   });
+}
+
+/** "ppc" → "PPC", "Fedi" → "fedi" (zoals de automatische orderbevestigingen), anders zoals getypt. */
+export function normalizeSupplier(raw: string): string {
+  const s = raw.trim().replace(/\s+/g, " ");
+  if (/^ppc$/i.test(s)) return "PPC";
+  if (/^fedi$/i.test(s)) return "fedi";
+  return s;
 }
 
 export async function linkPurchase(db: DbOrTx, purchaseId: string, trajectId: string, userId?: string | null) {

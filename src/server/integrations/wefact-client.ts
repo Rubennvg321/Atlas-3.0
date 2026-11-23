@@ -29,6 +29,8 @@ export interface WefactDebtor {
 export interface WefactClient {
   listQuotes(offset: number, limit: number): Promise<{ quotes: WefactQuote[]; total: number }>;
   debtor(code: string): Promise<WefactDebtor | null>;
+  /** De PDF van een offerte, zoals WeFact hem naar de klant stuurt. */
+  downloadQuote(ref: { identifier?: string | null; code?: string | null }): Promise<{ filename: string; pdf: Buffer } | null>;
 }
 
 export function liveWefact(apiKey: string): WefactClient {
@@ -61,6 +63,15 @@ export function liveWefact(apiKey: string): WefactClient {
       } catch {
         return null;
       }
+    },
+    async downloadQuote(ref) {
+      const params: Record<string, string> = { controller: "pricequote", action: "download" };
+      if (ref.identifier) params.Identifier = ref.identifier;
+      else if (ref.code) params.PriceQuoteCode = ref.code;
+      else return null;
+      const r = await call<{ pricequote?: { Filename?: string; Base64?: string } }>(params);
+      if (!r.pricequote?.Base64) return null;
+      return { filename: r.pricequote.Filename || `offerte-${ref.code ?? ref.identifier}.pdf`, pdf: Buffer.from(r.pricequote.Base64, "base64") };
     },
   };
 }

@@ -426,7 +426,20 @@ export async function addPurchaseAction(_prev: ActionResult | null, fd: FormData
   const res = await run(async () => {
     const amount = euroInput(str(fd, "amountExcl"));
     if (amount === null) throw new DomainError("Vul een bedrag excl. btw in.");
-    await addManualPurchase(getDb(), { trajectId, supplier: str(fd, "supplier") ?? "", orderNumber: str(fd, "orderNumber"), amountExcl: amount, userId: user.id });
+    const choice = str(fd, "supplier") ?? "";
+    const supplier = choice === "Anders" ? (str(fd, "supplierOther") ?? "") : choice;
+    if (!supplier) throw new DomainError("Vul de naam van de leverancier in.");
+    const dateStr = str(fd, "orderDate");
+    const orderDate = dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? new Date(`${dateStr}T12:00:00Z`) : null;
+    await addManualPurchase(getDb(), {
+      trajectId,
+      supplier,
+      orderNumber: str(fd, "orderNumber"),
+      amountExcl: amount,
+      description: str(fd, "description"),
+      orderDate,
+      userId: user.id,
+    });
   });
   revalidatePath(`/trajecten/${trajectId}`);
   revalidatePath("/bord");

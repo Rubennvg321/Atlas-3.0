@@ -11,6 +11,7 @@ import { FinanceCard, ProposalBanner } from "@/components/finance-card";
 import { getTrajectFinance } from "@/server/finance";
 import { openProposals } from "@/server/automation";
 import { displayName } from "@/lib/normalize";
+import { QuotePdfLink } from "@/components/quote-pdf-link";
 
 const MELDINGEN: Record<string, { text: string; tone: string }> = {
   nieuw: { text: "Nieuwe klant en traject aangemaakt.", tone: "bg-emerald-50 text-emerald-800" },
@@ -141,12 +142,38 @@ export default async function TrajectPage({ params, searchParams }: { params: Pr
             </ul>
           </Card>
 
+          <Card title="Offertes">
+            {d.quotes.length ? (
+              <ul className="space-y-1 text-sm">
+                {d.quotes.map((q) => (
+                  <li key={q.id} className="flex flex-wrap items-center justify-between gap-x-2">
+                    <span>
+                      {q.number} · {euro(q.amountExcl)} excl. btw · {q.status}
+                    </span>
+                    {(q.wefactId || q.number) && <QuotePdfLink quoteId={q.id} />}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-stone-500">Nog geen offertes. (Koppeling met WeFact volgt in fase 3.)</p>
+            )}
+          </Card>
+
           <Card title="Financieel (excl. btw)">
             <FinanceCard
               trajectId={t.id}
               f={{
                 ...finance,
-                purchases: finance.purchases.map((p) => ({ id: p.id, supplier: p.supplier, orderNumber: p.orderNumber, amountExcl: p.amountExcl, source: p.source, commission: p.commission })),
+                purchases: finance.purchases.map((p) => ({
+                  id: p.id,
+                  supplier: p.supplier,
+                  orderNumber: p.orderNumber,
+                  amountExcl: p.amountExcl,
+                  source: p.source,
+                  commission: p.commission,
+                  description: p.description,
+                  date: (p.orderDate ?? p.createdAt).toISOString(),
+                })),
               }}
             />
           </Card>
@@ -162,20 +189,6 @@ export default async function TrajectPage({ params, searchParams }: { params: Pr
               </ul>
             ) : (
               <p className="text-sm text-stone-500">Nog geen afspraken. (Koppeling met Google Agenda volgt in fase 2.)</p>
-            )}
-          </Card>
-
-          <Card title="Offertes">
-            {d.quotes.length ? (
-              <ul className="space-y-1 text-sm">
-                {d.quotes.map((q) => (
-                  <li key={q.id}>
-                    {q.number} · {euro(q.amountExcl)} excl. btw · {q.status}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-stone-500">Nog geen offertes. (Koppeling met WeFact volgt in fase 3.)</p>
             )}
           </Card>
 

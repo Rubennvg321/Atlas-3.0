@@ -57,6 +57,7 @@ Status, fouten, opnieuw proberen, tokens, worker.
 ## 11. Dashboard en widgets
 *"Ik wil iets aanpassen aan het dashboard of een widget toevoegen."*
 Widget "Bedrijfsstand" (omzet maand/jaar, geplande omzet, nieuwe leads, akkoord, montages), omzetdoel in Instellingen.
+Widget "Beste klant van de maand" (hoogste marge per montagedag, keuzemenu maand via `?maand=JJJJ-MM`).
 Ideeën: conversie, doorlooptijd, montageplanning. Nieuwe widget = nieuw bestand in `src/components/widgets/`.
 `src/app/(app)/dashboard/`, `src/server/dashboard.ts`, `src/components/widgets/`
 

@@ -145,3 +145,117 @@ export async function getUnlinkedAppointments(db: DbOrTx, now: Date = new Date()
     return { id: a.id, kind: a.kind, title: a.title, startsAt: a.startsAt, allDay: a.allDay, location: a.location, prefill };
   });
 }
+
+export interface BestCustomerRow {
+  customerId: string;
+  name: string;
+  city: string | null;
+  /** Trajecten van deze klant met montage in de gekozen maand (meestal één). */
+  trajectIds: string[];
+  saleExcl: number;
+  purchaseExcl: number;
+  margin: number;
+  montageDays: number;
+  marginPerDay: number;
+}
+
+export interface BestCustomerOfMonth {
+  /** Gekozen maand als "JJJJ-MM". */
+  month: string;
+  /** Maanden om uit te kiezen (nieuwste eerst): de huidige maand plus alle maanden met een montage. */
+  months: string[];
+  /** Klanten gesorteerd op marge per dag, hoogste eerst. */
+  ranking: BestCustomerRow[];
+  /** Trajecten met montage in deze maand die niet meetellen omdat verkoop, inkoop of montagedagen ontbreken. */
+  incomplete: number;
+}
+
+const MONTH_RE = /^(\d{4})-(0[1-9]|1[0-2])$/;
+
+/**
+ * Widget "Beste klant van de maand": welke klant leverde de hoogste gemiddelde
+ * marge per montagedag op? Zelfde regels als de rest van Atlas:
+ *  - verkoop = WeFact-offerte (geaccepteerd gaat voor), anders handmatige prijs;
+ *  - inkoop = som van de gekoppelde inkooporders;
+ *  - montagedagen = handmatig, anders afgeleid uit de geplande montage-afspraken;
+ *  - een traject telt in de maand waarin de (eerste) montage begint.
+ * Heeft een klant meerdere trajecten in de maand, dan is het gemiddelde
+ * totale marge ÷ totale montagedagen. Vervallen/verwijderde trajecten tellen niet.
+ */
+export async function getBestCustomerOfMonth(db: DbOrTx, month?: string | null, now: Date = new Date()): Promise<BestCustomerOfMonth> {
+  const current = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit" }).format(now).slice(0, 7);
+  const chosen = month && MONTH_RE.test(month) ? month : current;
+  const monthStart = `${chosen}-01`;
+
+  const rows = await db.execute<{
+    traject_id: string;
+    customer_id: string;
+    name: string;
+    city: string | null;
+    sale: string | null;
+    purchase: string | null;
+    days: number | null;
+  }>(sql`
+    with t as (
+      select tr.id, tr.customer_id,
+        (select min((a.starts_at at time zone 'Europe/Amsterdam')::date) from appointments a
+          where a.traject_id = tr.id and a.kind = 'montage' and a.status = 'gepland' and a.deleted_at is null) as montage_date
+      from trajects tr
+      join pipeline_stages ps on ps.key = tr.stage
+      where tr.deleted_at is null and ps.kind <> 'lost'
+    )
+    select t.id as traject_id, c.id as customer_id, c.display_name as name, coalesce(tr.site_city, c.city) as city,
+      coalesce(
+        (select q.amount_excl from quotes q
+          where q.traject_id = t.id and q.deleted_at is null and q.amount_excl is not null
+          order by (q.status = 'geaccepteerd') desc, q.quote_date desc nulls last, q.created_at desc
+          limit 1),
+        tr.sale_amount_excl_manual
+      )::text as sale,
+      (select sum(p.amount_excl) from purchase_orders p where p.traject_id = t.id and p.deleted_at is null)::text as purchase,
+      coalesce(tr.montage_days_manual, (
+        select nullif(count(distinct d), 0)::int from appointments a,
+          generate_series((a.starts_at at time zone 'Europe/Amsterdam')::date,
+                          ((a.ends_at - interval '1 second') at time zone 'Europe/Amsterdam')::date, interval '1 day') d
+        where a.traject_id = t.id and a.kind = 'montage' and a.status = 'gepland' and a.deleted_at is null)) as days
+    from t
+    join trajects tr on tr.id = t.id
+    join customers c on c.id = t.customer_id
+    where t.montage_date >= ${monthStart}::date and t.montage_date < (${monthStart}::date + interval '1 month')
+      and c.deleted_at is null
+  `);
+
+  const byCustomer = new Map<string, BestCustomerRow>();
+  let incomplete = 0;
+  for (const r of rows) {
+    const days = r.days === null ? 0 : Number(r.days);
+    if (r.sale === null || r.purchase === null || !(days > 0)) {
+      incomplete++;
+      continue;
+    }
+    const row =
+      byCustomer.get(r.customer_id) ??
+      { customerId: r.customer_id, name: r.name, city: r.city, trajectIds: [], saleExcl: 0, purchaseExcl: 0, margin: 0, montageDays: 0, marginPerDay: 0 };
+    row.trajectIds.push(r.traject_id);
+    row.saleExcl += Number(r.sale);
+    row.purchaseExcl += Number(r.purchase);
+    row.montageDays += days;
+    byCustomer.set(r.customer_id, row);
+  }
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const ranking = [...byCustomer.values()]
+    .map((r) => {
+      const margin = round2(r.saleExcl - r.purchaseExcl);
+      return { ...r, saleExcl: round2(r.saleExcl), purchaseExcl: round2(r.purchaseExcl), margin, marginPerDay: round2(margin / r.montageDays) };
+    })
+    .sort((a, b) => b.marginPerDay - a.marginPerDay || b.margin - a.margin || a.name.localeCompare(b.name, "nl"));
+
+  const monthRows = await db.execute<{ m: string }>(sql`
+    select distinct to_char((a.starts_at at time zone 'Europe/Amsterdam'), 'YYYY-MM') as m
+      from appointments a join trajects tr on tr.id = a.traject_id
+     where a.kind = 'montage' and a.status = 'gepland' and a.deleted_at is null and tr.deleted_at is null
+  `);
+  const months = [...new Set([current, chosen, ...monthRows.map((r) => r.m)])].sort().reverse();
+
+  return { month: chosen, months, ranking, incomplete };
+}

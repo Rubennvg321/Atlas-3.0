@@ -1,12 +1,12 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { closeDb } from "@/db";
-import { appointments, quotes, trajects } from "@/db/schema";
+import { appointments, purchaseOrders, quotes, trajects } from "@/db/schema";
 import { intakeLead } from "@/server/intake";
 import { changeStage } from "@/server/trajects";
 import { setManualFinance } from "@/server/finance";
 import { setSetting } from "@/server/settings";
-import { getBusinessStats, getUnlinkedAppointments } from "@/server/dashboard";
+import { getBestCustomerOfMonth, getBusinessStats, getUnlinkedAppointments } from "@/server/dashboard";
 import { linkAppointmentToCustomer } from "@/server/integrations/calendar-sync";
 import { db, lead, resetDb, uid } from "./helpers";
 
@@ -93,6 +93,56 @@ describe("dashboard: Bedrijfsstand", () => {
     expect(s.revenueMonth).toBe(4000);
     expect(s.targetPct).toBe(125);
     expect(s.montagesPlanned).toBe(1);
+  });
+});
+
+describe("dashboard: Beste klant van de maand", () => {
+  async function inkoop(trajectId: string, amount: string) {
+    await db().insert(purchaseOrders).values({ trajectId, supplier: "PPC", amountExcl: amount });
+  }
+
+  it("rangschikt klanten op marge per montagedag in de gekozen maand", async () => {
+    // A: 6000 - 2000 = 4000 over 2 dagen = 2000/dag
+    const a = await traject("Klant Een", "montage_gepland");
+    await setManualFinance(db(), a, { saleAmountExcl: 6000 });
+    await inkoop(a, "2000.00");
+    await montage(a, "2026-11-03");
+    await montage(a, "2026-11-04");
+    // B: 3000 - 500 = 2500 in 1 dag (handmatig) = 2500/dag -> nummer 1
+    const b = await traject("Klant Twee", "in_uitvoering");
+    await setManualFinance(db(), b, { saleAmountExcl: 3000, montageDays: 1 });
+    await inkoop(b, "300.00");
+    await inkoop(b, "200.00");
+    await montage(b, "2026-11-10");
+    // C: geen inkoop -> telt niet mee
+    const c = await traject("Klant Drie", "montage_gepland");
+    await setManualFinance(db(), c, { saleAmountExcl: 9000 });
+    await montage(c, "2026-11-12");
+    // D: vervallen -> telt niet mee
+    const d = await traject("Klant Vier", "vervallen");
+    await setManualFinance(db(), d, { saleAmountExcl: 9000 });
+    await inkoop(d, "100.00");
+    await montage(d, "2026-11-13");
+    // E: andere maand
+    const e = await traject("Klant Vijf", "review_gestuurd");
+    await setManualFinance(db(), e, { saleAmountExcl: 9000 });
+    await inkoop(e, "100.00");
+    await montage(e, "2026-10-08");
+
+    const nov = await getBestCustomerOfMonth(db(), null, NOW);
+    expect(nov.month).toBe("2026-11");
+    expect(nov.ranking.map((r) => [r.name, r.marginPerDay, r.montageDays])).toEqual([
+      ["Klant Twee", 2500, 1],
+      ["Klant Een", 2000, 2],
+    ]);
+    expect(nov.incomplete).toBe(1);
+    expect(nov.months).toEqual(["2026-11", "2026-10"]);
+
+    const okt = await getBestCustomerOfMonth(db(), "2026-10", NOW);
+    expect(okt.ranking.map((r) => [r.name, r.marginPerDay])).toEqual([["Klant Vijf", 8900]]);
+
+    // Ongeldige maand valt terug op de huidige maand.
+    expect((await getBestCustomerOfMonth(db(), "2026-13", NOW)).month).toBe("2026-11");
   });
 });
 

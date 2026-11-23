@@ -220,6 +220,8 @@ export const appointments = pgTable(
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }).notNull(),
     location: text("location"),
+    /** E-mailadressen van de gasten (zonder eigen adres), om de afspraak later alsnog aan een klant te kunnen koppelen. */
+    attendeeEmails: text("attendee_emails").array().notNull().default(sql`'{}'::text[]`),
     allDay: boolean("all_day").notNull().default(false),
     status: text("status").notNull().default("gepland"), // gepland | geannuleerd
     googleCalendarId: text("google_calendar_id"),

@@ -14,4 +14,6 @@ test("zijbalk: van klantenbord naar dashboard met de widget Bedrijfsstand", asyn
   for (const label of ["Omzet deze maand", "Geplande omzet", "Nieuwe leads", "Akkoord", "Montages gepland"]) {
     await expect(page.getByText(label, { exact: true })).toBeVisible();
   }
+  await expect(page.getByRole("heading", { name: "Beste klant van de maand" })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Kies een maand" })).toBeVisible();
 });

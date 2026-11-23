@@ -2,12 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
-
-export const monthLabel = (m: string) => {
-  const [y, mo] = m.split("-").map(Number);
-  const s = new Date(Date.UTC(y, mo - 1, 15)).toLocaleDateString("nl-NL", { month: "long", year: "numeric", timeZone: "UTC" });
-  return s.charAt(0).toUpperCase() + s.slice(1);
-};
+import { monthLabel } from "./month-label";
 
 /** Keuzemenu voor de maand; zet `?maand=JJJJ-MM` in de adresbalk. */
 export function MonthPicker({ value, months, param = "maand" }: { value: string; months: string[]; param?: string }) {

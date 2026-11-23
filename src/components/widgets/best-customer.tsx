@@ -1,7 +1,8 @@
 import Link from "next/link";
 import clsx from "clsx";
 import type { BestCustomerOfMonth } from "@/server/dashboard";
-import { MonthPicker, monthLabel } from "./month-picker";
+import { MonthPicker } from "./month-picker";
+import { monthLabel } from "./month-label";
 
 const euro = (n: number) => "€ " + new Intl.NumberFormat("nl-NL", { maximumFractionDigits: 0 }).format(Math.round(n));
 

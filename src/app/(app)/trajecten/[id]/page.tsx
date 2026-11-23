@@ -173,6 +173,7 @@ export default async function TrajectPage({ params, searchParams }: { params: Pr
                   commission: p.commission,
                   description: p.description,
                   date: (p.orderDate ?? p.createdAt).toISOString(),
+                  documents: p.documents.map((doc) => ({ id: doc.id, kind: doc.kind, filename: doc.filename, source: doc.source })),
                 })),
               }}
             />

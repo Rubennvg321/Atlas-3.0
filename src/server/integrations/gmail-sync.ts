@@ -1,13 +1,14 @@
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/db";
-import { contactPoints, customers, emails, inboundItems, pipelineStages, trajects } from "@/db/schema";
-import { addresses, attachments, bodyText, header, type GmailMessage } from "@/lib/mime";
+import { contactPoints, customers, emails, inboundItems, pipelineStages, purchaseDocuments, purchaseOrders, trajects } from "@/db/schema";
+import { addresses, attachments, bodyHtml, bodyText, header, type GmailMessage } from "@/lib/mime";
 import { htmlToText, parseWebsiteForm } from "@/lib/intake/website-form";
 import { parsePpcOrder } from "@/lib/parsers/ppc";
 import { parseFediOrder } from "@/lib/parsers/fedi";
 import { parseWefactAccepted } from "@/lib/parsers/wefact-mail";
 import { intakeLead } from "../intake";
 import { handleQuoteAccepted, recordSupplierOrder } from "../purchases";
+import { addPurchaseDocument, findPurchaseForInvoice } from "../purchase-documents";
 import { getSetting } from "../settings";
 import { addTimeline } from "../timeline";
 import { pdfToText } from "../pdf";
@@ -74,8 +75,48 @@ export async function syncWefactMails(db: DbOrTx, gmail: GmailClient): Promise<n
   return n;
 }
 
-/** 3. Orderbevestigingen van leveranciers -> inkoop. */
-export async function syncSupplierMails(db: DbOrTx, gmail: GmailClient): Promise<number> {
+type PdfText = (buf: Buffer) => Promise<string>;
+const isPdf = (a: { mimeType: string; filename: string }) => /pdf/i.test(a.mimeType) || /\.pdf$/i.test(a.filename);
+
+/**
+ * Bewaart het document van een orderbevestiging bij de bestelling: de PDF-bijlage(n),
+ * of (zonder PDF, zoals bij fedi) de mail zelf. Idempotent per mail + bestandsnaam.
+ */
+async function saveOrderDocuments(db: DbOrTx, gmail: GmailClient, m: GmailMessage, purchaseOrderId: string, label: string) {
+  const pdfs = attachments(m).filter(isPdf);
+  for (const a of pdfs) {
+    await addPurchaseDocument(db, {
+      purchaseOrderId,
+      kind: "orderbevestiging",
+      filename: a.filename,
+      mimeType: "application/pdf",
+      data: await gmail.attachment(m.id, a.attachmentId),
+      source: "gmail",
+      gmailMessageId: m.id,
+    });
+  }
+  if (!pdfs.length) {
+    const html = bodyHtml(m);
+    const subject = header(m, "Subject") ?? "Orderbevestiging";
+    const content = html ?? `<pre style="white-space:pre-wrap;font-family:sans-serif">${escapeHtml(text(m))}</pre>`;
+    const page = `<!doctype html><meta charset="utf-8"><title>${escapeHtml(subject)}</title><h3 style="font-family:sans-serif">${escapeHtml(subject)}</h3>${content}`;
+    await addPurchaseDocument(db, {
+      purchaseOrderId,
+      kind: "orderbevestiging",
+      filename: `orderbevestiging-${label}.html`.replace(/[^\w.\-]+/g, "-"),
+      mimeType: "text/html",
+      data: Buffer.from(page, "utf8"),
+      source: "gmail",
+      gmailMessageId: m.id,
+    });
+  }
+}
+
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+
+/** 3. Orderbevestigingen van leveranciers -> inkoop (met het document erbij). */
+export async function syncSupplierMails(db: DbOrTx, gmail: GmailClient, opts: { pdfText?: PdfText } = {}): Promise<number> {
+  const pdfText = opts.pdfText ?? pdfToText;
   const s = await getSetting(db, "suppliers");
   let n = 0;
   for (const rule of s.rules) {
@@ -86,8 +127,8 @@ export async function syncSupplierMails(db: DbOrTx, gmail: GmailClient): Promise
         const m = await gmail.get(id, "full");
         let order = null;
         if (rule.parser === "ppc-pdf") {
-          for (const a of attachments(m).filter((x) => /pdf/i.test(x.mimeType) || /\.pdf$/i.test(x.filename))) {
-            order = parsePpcOrder(await pdfToText(await gmail.attachment(id, a.attachmentId)));
+          for (const a of attachments(m).filter(isPdf)) {
+            order = parsePpcOrder(await pdfText(await gmail.attachment(id, a.attachmentId)));
             if (order) break;
           }
         } else if (rule.parser === "fedi-mail") {
@@ -97,12 +138,79 @@ export async function syncSupplierMails(db: DbOrTx, gmail: GmailClient): Promise
         }
         if (!order || order.amountExcl === null) return { status: "ignored", payload: { reden: "niet herkend" } };
         const r = await recordSupplierOrder(db, order, { gmailMessageId: id, source: "gmail" });
+        await saveOrderDocuments(db, gmail, m, r.purchase.id, `${order.supplier}-${order.orderNumber ?? id}`);
+        await markDocumentsFetched(db, r.purchase.id);
         return { status: r.purchase.status === "gekoppeld" ? "done" : "te_controleren", payload: { leverancier: order.supplier, order: order.orderNumber } };
       });
       if (did) n++;
     }
+    n += await syncSupplierInvoices(db, gmail, rule, pdfText);
+  }
+  n += await backfillOrderDocuments(db, gmail);
+  return n;
+}
+
+const markDocumentsFetched = (db: DbOrTx, purchaseId: string) =>
+  db.insert(inboundItems).values({ provider: "gmail-inkoop-doc", externalId: purchaseId, payload: {}, status: "done", processedAt: new Date() }).onConflictDoNothing();
+
+/**
+ * Inkoopfacturen per mail (onderwerp "factuur", "Rechnung" of "invoice", met PDF):
+ * het ordernummer in de PDF bepaalt bij welke bestelling de factuur hoort.
+ */
+async function syncSupplierInvoices(db: DbOrTx, gmail: GmailClient, rule: { supplier: string; from: string }, pdfText: PdfText) {
+  let n = 0;
+  const ids = new Set<string>();
+  for (const word of ["factuur", "rechnung", "invoice"]) {
+    for (const id of await gmail.search(`from:${rule.from} subject:${word} has:attachment newer_than:60d`, 50)) ids.add(id);
+  }
+  for (const id of ids) {
+    const did = await oncePerMessage(db, "gmail-inkoopfactuur", id, async () => {
+      const m = await gmail.get(id, "full");
+      const linked: string[] = [];
+      for (const a of attachments(m).filter(isPdf)) {
+        const buf = await gmail.attachment(id, a.attachmentId);
+        const po = await findPurchaseForInvoice(db, rule.supplier, await pdfText(buf));
+        if (!po) continue;
+        await addPurchaseDocument(db, { purchaseOrderId: po.id, kind: "factuur", filename: a.filename, mimeType: "application/pdf", data: buf, source: "gmail", gmailMessageId: id });
+        linked.push(po.orderNumber ?? po.id);
+      }
+      return { status: linked.length ? "done" : "te_controleren", payload: { leverancier: rule.supplier, orders: linked, onderwerp: header(m, "Subject") } };
+    });
+    if (did) n++;
   }
   return n;
+}
+
+/** Bestellingen die al uit Gmail kwamen vóór documenten werden bewaard: document alsnog ophalen. */
+async function backfillOrderDocuments(db: DbOrTx, gmail: GmailClient, max = 20) {
+  const todo = await db
+    .select({ id: purchaseOrders.id, gmailMessageId: purchaseOrders.gmailMessageId, supplier: purchaseOrders.supplier, orderNumber: purchaseOrders.orderNumber })
+    .from(purchaseOrders)
+    .where(
+      and(
+        eq(purchaseOrders.source, "gmail"),
+        isNotNull(purchaseOrders.gmailMessageId),
+        isNull(purchaseOrders.deletedAt),
+        sql`not exists (select 1 from ${purchaseDocuments} d where d.purchase_order_id = ${purchaseOrders.id})`,
+        sql`not exists (select 1 from ${inboundItems} i where i.provider = 'gmail-inkoop-doc' and i.external_id = ${purchaseOrders.id}::text)`,
+      ),
+    )
+    .limit(max);
+  for (const p of todo) {
+    try {
+      const m = await gmail.get(p.gmailMessageId!, "full");
+      await saveOrderDocuments(db, gmail, m, p.id, `${p.supplier}-${p.orderNumber ?? p.gmailMessageId}`);
+    } catch (e) {
+      // Mail verwijderd of onleesbaar: niet elke keer opnieuw proberen, de bestelling zelf blijft staan.
+      if (!/fetch failed|ECONN|ETIMEDOUT|429|rate/i.test(String(e))) {
+        await markDocumentsFetched(db, p.id);
+        continue;
+      }
+      throw e;
+    }
+    await markDocumentsFetched(db, p.id);
+  }
+  return todo.length;
 }
 
 /** 4. Mail met bekende klanten aan het traject koppelen (alleen afzender/onderwerp/fragment). */

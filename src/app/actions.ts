@@ -23,6 +23,7 @@ import { setManualFinance } from "@/server/finance";
 import { addManualPurchase, deletePurchase, linkPurchase } from "@/server/purchases";
 import { decideProposal } from "@/server/automation";
 import { liveWefact } from "@/server/integrations/wefact-client";
+import { addPurchaseDocument, deletePurchaseDocument, validateDocument } from "@/server/purchase-documents";
 import { cfg, friendlyError, getIntegration, upsertIntegration, type Provider } from "@/server/integrations/state";
 import { encrypt } from "@/server/crypto";
 import { audit } from "@/server/timeline";
@@ -431,7 +432,10 @@ export async function addPurchaseAction(_prev: ActionResult | null, fd: FormData
     if (!supplier) throw new DomainError("Vul de naam van de leverancier in.");
     const dateStr = str(fd, "orderDate");
     const orderDate = dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? new Date(`${dateStr}T12:00:00Z`) : null;
-    await addManualPurchase(getDb(), {
+    const file = fd.get("file");
+    const upload = file && typeof file === "object" && "arrayBuffer" in file && file.size > 0 ? file : null;
+    if (upload) validateDocument(upload.name, upload.type, upload.size);
+    const p = await addManualPurchase(getDb(), {
       trajectId,
       supplier,
       orderNumber: str(fd, "orderNumber"),
@@ -440,10 +444,49 @@ export async function addPurchaseAction(_prev: ActionResult | null, fd: FormData
       orderDate,
       userId: user.id,
     });
+    if (upload) {
+      await addPurchaseDocument(getDb(), {
+        purchaseOrderId: p.id,
+        kind: "factuur",
+        filename: upload.name || "factuur",
+        mimeType: upload.type,
+        data: Buffer.from(await upload.arrayBuffer()),
+        userId: user.id,
+      });
+    }
   });
   revalidatePath(`/trajecten/${trajectId}`);
   revalidatePath("/bord");
   return res.ok ? { ok: true } : res;
+}
+
+export async function uploadPurchaseDocumentAction(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  const user = await requireUser();
+  const trajectId = str(fd, "trajectId")!;
+  const res = await run(async () => {
+    const files = fd.getAll("file").filter((f): f is File => typeof f === "object" && f !== null && "arrayBuffer" in f && f.size > 0);
+    if (!files.length) throw new DomainError("Kies een bestand (PDF of foto).");
+    const kind = str(fd, "kind");
+    for (const f of files) {
+      await addPurchaseDocument(getDb(), {
+        purchaseOrderId: str(fd, "purchaseOrderId") ?? "",
+        kind: kind === "orderbevestiging" || kind === "overig" ? kind : "factuur",
+        filename: f.name || "document",
+        mimeType: f.type,
+        data: Buffer.from(await f.arrayBuffer()),
+        source: "upload",
+        userId: user.id,
+      });
+    }
+  });
+  revalidatePath(`/trajecten/${trajectId}`);
+  return res.ok ? { ok: true } : res;
+}
+
+export async function deletePurchaseDocumentAction(documentId: string, trajectId: string) {
+  await requireUser();
+  await deletePurchaseDocument(getDb(), documentId);
+  revalidatePath(`/trajecten/${trajectId}`);
 }
 
 export async function deletePurchaseAction(purchaseId: string, trajectId: string) {

@@ -49,6 +49,12 @@ export function bodyText(m: GmailMessage, htmlToText: (h: string) => string, pre
   return m.snippet ?? "";
 }
 
+/** De HTML-versie van een mail (onbewerkt), of null. */
+export function bodyHtml(m: GmailMessage): string | null {
+  const html = walk(m.payload).find((p) => p.mimeType === "text/html" && p.body?.data);
+  return html?.body?.data ? b64urlDecode(html.body.data).toString("utf8") : null;
+}
+
 export function attachments(m: GmailMessage) {
   return walk(m.payload)
     .filter((p) => p.filename && p.body?.attachmentId)

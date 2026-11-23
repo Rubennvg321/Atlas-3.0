@@ -12,6 +12,7 @@ import { getTrajectFinance } from "@/server/finance";
 import { openProposals } from "@/server/automation";
 import { displayName } from "@/lib/normalize";
 import { QuotePdfLink } from "@/components/quote-pdf-link";
+import { LinkQuoteByNumber } from "@/components/link-quote";
 
 const MELDINGEN: Record<string, { text: string; tone: string }> = {
   nieuw: { text: "Nieuwe klant en traject aangemaakt.", tone: "bg-emerald-50 text-emerald-800" },
@@ -155,8 +156,9 @@ export default async function TrajectPage({ params, searchParams }: { params: Pr
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-stone-500">Nog geen offertes. (Koppeling met WeFact volgt in fase 3.)</p>
+              <p className="text-sm text-stone-500">Nog geen offerte gekoppeld.</p>
             )}
+            <LinkQuoteByNumber trajectId={t.id} />
           </Card>
 
           <Card title="Financieel (excl. btw)">

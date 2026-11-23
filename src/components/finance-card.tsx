@@ -1,7 +1,14 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
-import { addPurchaseAction, decideProposalAction, deletePurchaseAction, saveFinanceAction } from "@/app/actions";
+import {
+  addPurchaseAction,
+  decideProposalAction,
+  deletePurchaseAction,
+  deletePurchaseDocumentAction,
+  saveFinanceAction,
+  uploadPurchaseDocumentAction,
+} from "@/app/actions";
 import { date, euroCents as euro } from "@/lib/format";
 import { Button, Field, FormMessage, Input, Select, SubmitButton } from "./ui";
 
@@ -27,6 +34,7 @@ export interface FinanceView {
     commission: string | null;
     description: string | null;
     date: string;
+    documents: { id: string; kind: string; filename: string; source: string }[];
   }[];
 }
 
@@ -91,6 +99,7 @@ export function FinanceCard({ trajectId, f }: { trajectId: string; f: FinanceVie
                   {p.orderNumber ? ` ${p.orderNumber}` : ""} · {euro(p.amountExcl)} · {date(p.date)}
                   {p.source === "gmail" ? " · automatisch uit Gmail" : " · handmatig"}
                   {p.description && <span className="block text-stone-500">{p.description}</span>}
+                  <PurchaseDocuments trajectId={trajectId} purchaseId={p.id} documents={p.documents} />
                 </span>
                 <button
                   disabled={pending}
@@ -149,6 +158,9 @@ export function FinanceCard({ trajectId, f }: { trajectId: string; f: FinanceVie
               <Input name="orderDate" type="date" defaultValue={today()} />
             </Field>
           </div>
+          <Field label="Factuur of orderbevestiging (optioneel, PDF of foto)">
+            <input name="file" type="file" accept={ACCEPT} className="block w-full text-xs" />
+          </Field>
           <FormMessage state={pState} />
           <SubmitButton>Opslaan</SubmitButton>
         </form>
@@ -171,6 +183,51 @@ export function FinanceCard({ trajectId, f }: { trajectId: string; f: FinanceVie
         </form>
       )}
     </div>
+  );
+}
+
+const ACCEPT = "application/pdf,image/*";
+const KIND_LABEL: Record<string, string> = { orderbevestiging: "Orderbevestiging", factuur: "Factuur", overig: "Document" };
+
+/** Documenten bij één bestelling: bekijken, toevoegen (PDF of foto) en verwijderen. */
+function PurchaseDocuments({ trajectId, purchaseId, documents }: { trajectId: string; purchaseId: string; documents: { id: string; kind: string; filename: string; source: string }[] }) {
+  const [state, action, busy] = useActionState(uploadPurchaseDocumentAction, null);
+  const [pending, start] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (state?.ok) formRef.current?.reset();
+  }, [state]);
+  return (
+    <span className="mt-1 flex flex-wrap items-center gap-1.5">
+      {documents.map((d) => (
+        <span key={d.id} className="inline-flex items-center gap-1 rounded-md border border-stone-300 bg-white px-1.5 py-0.5">
+          <a href={`/api/documenten/${d.id}`} target="_blank" rel="noreferrer" className="text-stone-700 hover:underline" title={d.filename}>
+            📄 {KIND_LABEL[d.kind] ?? "Document"}
+          </a>
+          {d.source === "upload" && (
+            <button
+              type="button"
+              disabled={pending}
+              className="text-stone-400 hover:text-red-600"
+              aria-label="Document verwijderen"
+              onClick={() => confirm("Dit document verwijderen?") && start(() => deletePurchaseDocumentAction(d.id, trajectId))}
+            >
+              ✕
+            </button>
+          )}
+        </span>
+      ))}
+      <form ref={formRef} action={action} className="inline">
+        <input type="hidden" name="trajectId" value={trajectId} />
+        <input type="hidden" name="purchaseOrderId" value={purchaseId} />
+        <input type="hidden" name="kind" value="factuur" />
+        <label className={`cursor-pointer rounded-md border border-dashed border-stone-300 px-1.5 py-0.5 text-stone-600 hover:bg-stone-50 ${busy ? "opacity-50" : ""}`}>
+          {busy ? "Bezig…" : "+ Factuur"}
+          <input name="file" type="file" accept={ACCEPT} className="sr-only" disabled={busy} onChange={(e) => e.currentTarget.form?.requestSubmit()} />
+        </label>
+      </form>
+      {state && !state.ok && <span className="w-full text-red-700">{state.error}</span>}
+    </span>
   );
 }
 

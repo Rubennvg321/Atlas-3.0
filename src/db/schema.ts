@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  customType,
   check,
   index,
   integer,
@@ -12,6 +13,8 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
 
 const id = () => uuid("id").primaryKey().defaultRandom();
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -283,6 +286,35 @@ export const purchaseOrders = pgTable(
     uniqueIndex("purchase_orders_supplier_order_uq").on(t.supplier, t.orderNumber).where(sql`${t.orderNumber} is not null`),
     index("purchase_orders_traject_idx").on(t.trajectId),
     index("purchase_orders_status_idx").on(t.status),
+  ],
+);
+
+/**
+ * Documenten bij een bestelling: orderbevestiging (PDF of de mail zelf) en
+ * inkoopfactuur. Automatisch uit Gmail of handmatig geüpload (PDF of foto).
+ */
+export const purchaseDocuments = pgTable(
+  "purchase_documents",
+  {
+    id: id(),
+    purchaseOrderId: uuid("purchase_order_id")
+      .notNull()
+      .references(() => purchaseOrders.id),
+    kind: text("kind").notNull().default("factuur"), // orderbevestiging | factuur | overig
+    filename: text("filename").notNull(),
+    mimeType: text("mime_type").notNull(),
+    size: integer("size").notNull(),
+    data: bytea("data").notNull(),
+    source: text("source").notNull().default("upload"), // gmail | upload
+    gmailMessageId: text("gmail_message_id"),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: createdAt(),
+    deletedAt: deletedAt(),
+  },
+  (t) => [
+    index("purchase_documents_po_idx").on(t.purchaseOrderId),
+    // Idempotent: dezelfde bijlage uit dezelfde mail maar één keer per bestelling.
+    uniqueIndex("purchase_documents_gmail_uq").on(t.purchaseOrderId, t.gmailMessageId, t.filename).where(sql`${t.gmailMessageId} is not null`),
   ],
 );
 

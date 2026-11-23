@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { DbOrTx } from "@/db";
 import {
   appointments,
@@ -8,6 +8,8 @@ import {
   emails,
   inboundItems,
   notes,
+  purchaseDocuments,
+  purchaseOrders,
   quotes,
   tasks,
   timelineEvents,
@@ -205,6 +207,12 @@ export async function anonymizeCustomer(db: DbOrTx, id: string, userId?: string 
     await tx.update(emails).set({ fromAddress: null, toAddresses: null, subject: null, snippet: null }).where(eq(emails.customerId, id));
     await tx.update(appointments).set({ title: "(geanonimiseerd)", location: null }).where(eq(appointments.customerId, id));
     await tx.update(inboundItems).set({ payload: {} }).where(eq(inboundItems.customerId, id));
+    // Inkoop: bedragen blijven, de naam (commissie) en documenten met persoonsgegevens niet.
+    await tx.update(purchaseOrders).set({ commission: null, description: null }).where(eq(purchaseOrders.customerId, id));
+    await tx
+      .update(purchaseDocuments)
+      .set({ data: Buffer.alloc(0), size: 0, filename: "verwijderd", deletedAt: new Date() })
+      .where(inArray(purchaseDocuments.purchaseOrderId, tx.select({ id: purchaseOrders.id }).from(purchaseOrders).where(eq(purchaseOrders.customerId, id))));
     await audit(tx, userId, "anonymize", "customer", id);
   });
 }

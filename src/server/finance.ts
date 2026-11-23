@@ -4,6 +4,7 @@ import { appointments, purchaseOrders, quotes, trajects } from "@/db/schema";
 import { calcFinance } from "@/lib/finance";
 import { montageDays } from "@/lib/montage-days";
 import { DomainError, NotFoundError } from "./errors";
+import { documentsForPurchases } from "./purchase-documents";
 import { addTimeline } from "./timeline";
 
 /**
@@ -31,6 +32,7 @@ export async function getTrajectFinance(db: DbOrTx, trajectId: string) {
     .where(and(eq(purchaseOrders.trajectId, trajectId), isNull(purchaseOrders.deletedAt)))
     // Oudste eerst: de eerste is de hoofdbestelling, daarna de extra bestellingen.
     .orderBy(sql`coalesce(${purchaseOrders.orderDate}, ${purchaseOrders.createdAt})`, purchaseOrders.createdAt);
+  const docs = await documentsForPurchases(db, pos.map((p) => p.id));
   const purchaseExcl = pos.length ? pos.reduce((s, p) => s + Number(p.amountExcl), 0) : null;
 
   const apps = await db
@@ -45,7 +47,7 @@ export async function getTrajectFinance(db: DbOrTx, trajectId: string) {
     saleSource,
     saleManual: t.saleAmountExclManual !== null ? Number(t.saleAmountExclManual) : null,
     hasWefactAmount: !!quoteWithAmount,
-    purchases: pos,
+    purchases: pos.map((p) => ({ ...p, documents: docs.filter((d) => d.purchaseOrderId === p.id) })),
     montageDates: days,
     montageDaysManual: t.montageDaysManual,
   };

@@ -15,6 +15,8 @@ export interface FakeMail {
   body?: string;
   /** Optioneel: aparte HTML-versie (zoals fedi: Duitse tekst + Nederlandse HTML). */
   html?: string;
+  /** Bijlagen (bijv. een PDF); `data` wordt teruggegeven door attachment(). */
+  attachments?: { filename: string; mimeType: string; data: Buffer }[];
   date?: Date;
   labels?: string[];
 }
@@ -40,6 +42,7 @@ export function fakeGmail(mails: FakeMail[], account = OWN) {
       parts: [
         ...(m.body ? [{ mimeType: "text/plain", body: { data: b64urlEncode(m.body) } }] : []),
         ...(m.html ? [{ mimeType: "text/html", body: { data: b64urlEncode(m.html) } }] : []),
+        ...(m.attachments ?? []).map((a, i) => ({ mimeType: a.mimeType, filename: a.filename, body: { attachmentId: `${m.id}-att-${i}` } })),
       ],
     },
   });
@@ -63,8 +66,11 @@ export function fakeGmail(mails: FakeMail[], account = OWN) {
     async get(id) {
       return toMsg(mails.find((m) => m.id === id)!);
     },
-    async attachment() {
-      throw new Error("geen bijlagen in de nagebootste Gmail");
+    async attachment(messageId, attachmentId) {
+      const m = mails.find((x) => x.id === messageId);
+      const a = m?.attachments?.[Number(attachmentId.split("-att-")[1])];
+      if (!a) throw new Error("bijlage niet gevonden in de nagebootste Gmail");
+      return a.data;
     },
     async ensureLabel(name) {
       if (!labels.has(name)) labels.set(name, `Label_${labels.size + 1}`);

@@ -5,6 +5,7 @@ import { requireUser } from "@/server/session";
 export default async function MorePage() {
   const user = await requireUser();
   const links = [
+    { href: "/meldingen", label: "Meldingen en app op je telefoon" },
     { href: "/koppelingen", label: "Koppelingen (Gmail, Agenda, WeFact, reviews)" },
     { href: "/import", label: "Bestaande klanten importeren" },
     { href: "/instellingen", label: "Instellingen" },

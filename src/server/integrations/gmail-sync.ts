@@ -6,7 +6,9 @@ import { htmlToText, parseWebsiteForm } from "@/lib/intake/website-form";
 import { parsePpcOrder } from "@/lib/parsers/ppc";
 import { parseFediOrder } from "@/lib/parsers/fedi";
 import { parseWefactAccepted } from "@/lib/parsers/wefact-mail";
-import { intakeLead } from "../intake";
+import { intakeLead, type IntakeResult } from "../intake";
+import { queueNotification, type NotificationInput } from "../notify";
+import type { LeadInput } from "@/lib/intake/types";
 import { handleQuoteAccepted, recordSupplierOrder } from "../purchases";
 import { addPurchaseDocument, findPurchaseForInvoice } from "../purchase-documents";
 import { getSetting } from "../settings";
@@ -82,16 +84,31 @@ export async function syncLeadMails(db: DbOrTx, gmail: GmailClient): Promise<num
         continue;
       }
       // intakeLead is idempotent op het message-id: opnieuw verwerken geeft hetzelfde resultaat.
-      await intakeLead(db, lead, {
+      const r = await intakeLead(db, lead, {
         provider: "website",
         externalId: `gmail:${id}`,
         occurredAt: m.internalDate ? new Date(Number(m.internalDate)) : undefined,
       });
+      if (!r.alreadyProcessed) await queueNotification(db, leadNotification(id, lead, r));
       await gmail.modify(id, [doneLabel], ["INBOX"]);
       n++;
     }
   }
   return n;
+}
+
+/** Melding "Nieuwe aanvraag" voor een verwerkte aanvraagmail. */
+export function leadNotification(messageId: string, lead: LeadInput, r: IntakeResult): NotificationInput {
+  const who = lead.name?.trim() || [lead.person.firstName, lead.person.infix, lead.person.lastName].filter(Boolean).join(" ") || lead.emails[0] || "onbekend";
+  const known = !r.createdCustomer ? (r.decision === "doubt" ? "Mogelijk bestaande klant" : "Bestaande klant") : null;
+  const msg = lead.message?.replace(/\s+/g, " ").trim();
+  return {
+    type: "nieuwe_lead",
+    refKey: `nieuwe_lead:gmail:${messageId}`,
+    title: `Nieuwe aanvraag: ${who}`,
+    body: [[lead.city, known].filter(Boolean).join(" · "), msg ? (msg.length > 120 ? `${msg.slice(0, 117)}…` : msg) : null].filter(Boolean).join("\n") || null,
+    url: r.trajectId ? `/trajecten/${r.trajectId}` : `/klanten/${r.customerId}`,
+  };
 }
 
 /** 2. "Offerte … is online geaccepteerd" van WeFact. */

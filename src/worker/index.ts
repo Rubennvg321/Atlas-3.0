@@ -11,6 +11,7 @@ import { syncWefact } from "../server/integrations/wefact-sync";
 import { runDaily } from "../server/daily";
 import { decrypt } from "../server/crypto";
 import { getIntegration, isDue, runTracked, type Provider } from "../server/integrations/state";
+import { deliverPending, liveSender } from "../server/notify";
 
 /**
  * Achtergrondproces: draait elke 30 seconden en start synchronisaties die aan
@@ -18,7 +19,7 @@ import { getIntegration, isDue, runTracked, type Provider } from "../server/inte
  * Alles is idempotent, dus een herstart of dubbele run kan geen kwaad.
  */
 const WORKER_ID = `${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
-const INTERVALS: Record<Exclude<Provider, "google">, number> = { gmail: 2, google_calendar: 2, wefact: 15, dagelijks: 60 };
+const INTERVALS: Record<Exclude<Provider, "google" | "push">, number> = { gmail: 2, google_calendar: 2, wefact: 15, dagelijks: 60 };
 
 async function tick() {
   const db = getDb();
@@ -59,6 +60,12 @@ async function tick() {
         }
         return runDaily(db, gmail);
       });
+    }
+    // Meldingen versturen die klaarstaan (bv. "Nieuwe aanvraag" van de Gmail-ronde hierboven).
+    try {
+      await deliverPending(db, await liveSender(db));
+    } catch (e) {
+      console.error("meldingen:", e);
     }
   }
 }

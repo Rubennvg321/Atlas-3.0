@@ -65,6 +65,12 @@ Ideeën: conversie, doorlooptijd, montageplanning. Nieuwe widget = nieuw bestand
 *"Ik wil een onderdeel toevoegen aan de zijbalk."*
 `src/components/nav.tsx` (lijst `SECTIONS`), `src/app/(app)/layout.tsx`
 
+## 11c. Meldingen en de app op de telefoon
+*"Ik wil een melding toevoegen of iets aanpassen aan de Atlas-app op mijn telefoon."*
+Pushmeldingen (nu: nieuwe aanvraag), per soort aan/uit, apparaten, testmelding; installeerbare app (manifest, pictogrammen).
+Nieuwe soort melding = regel in `src/lib/notification-types.ts` + `queueNotification()` waar het gebeurt.
+`src/server/notify.ts`, `src/app/(app)/meldingen/`, `src/components/push-setup.tsx`, `public/sw.js`, `src/app/manifest.ts`
+
 ## 12. Import van bestaande klanten
 *"Ik wil bestaande klanten importeren."*
 `src/server/import.ts`, `src/app/(app)/import/`

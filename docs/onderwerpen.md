@@ -38,15 +38,15 @@ Aanvraagmails → lead + label "Atlas/Lead", label "Behandeld" zodra er een afsp
 Gele adviesgesprekken, rode montages, afspraak aanmaken vanuit Atlas (nog te bouwen), agendahistorie-import.
 `src/server/integrations/calendar-sync.ts`, `calendar-client.ts`, `src/lib/parsers/calendar.ts`
 
-## 8. WeFact
-*"Ik wil iets aanpassen aan de koppeling met WeFact."*
-Offertes, debiteuren, statuscodes, verkoop excl. btw.
-`src/server/integrations/wefact-sync.ts`, `wefact-client.ts`
-
-## 9. Reviews
+## 8. Reviews
 *"Ik wil iets aanpassen aan de reviewverzoeken."*
 Verzoek 2 dagen na montage, herinnering na 7 dagen, teksten, later Google Business-reviews ophalen.
 `src/server/daily.ts`, `src/lib/review-schedule.ts`, Koppelingen → Reviewverzoeken
+
+## 9. WeFact
+*"Ik wil iets aanpassen aan de koppeling met WeFact."*
+Offertes, debiteuren, statuscodes, verkoop excl. btw.
+`src/server/integrations/wefact-sync.ts`, `wefact-client.ts`
 
 ## 10. Koppelingen en achtergrondproces
 *"Er gaat iets mis met een koppeling of synchronisatie."*

@@ -3,28 +3,23 @@ import { getDb } from "@/db";
 import { pipelineStages } from "@/db/schema";
 import { getMatchSettings, getSetting } from "@/server/settings";
 import { Card, PageHeader } from "@/components/server-ui";
-import { AutomationForm, DashboardForm, MatchingForm, StagesForm } from "@/components/settings-forms";
+import { AutomationForm, MatchingForm, StagesForm } from "@/components/settings-forms";
 import { EVENT_LABEL, EVENT_TARGET, type StageEvent } from "@/lib/stage-rules";
 
 export const metadata = { title: "Instellingen" };
 
 export default async function SettingsPage() {
   const db = getDb();
-  const [matching, automation, intake, calendar, stages, dashboard] = await Promise.all([
+  const [matching, automation, intake, calendar, stages] = await Promise.all([
     getMatchSettings(db),
     getSetting(db, "automation"),
     getSetting(db, "intakeFilters"),
     getSetting(db, "calendarRules"),
     db.select().from(pipelineStages).where(eq(pipelineStages.active, true)).orderBy(asc(pipelineStages.position)),
-    getSetting(db, "dashboard"),
   ]);
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <PageHeader title="Instellingen" />
-      <Card title="Dashboard">
-        <p className="mb-4 text-sm text-stone-600">Het dashboard laat bij &lsquo;Omzet deze maand&rsquo; zien hoeveel procent van dit doel al is gehaald.</p>
-        <DashboardForm monthlyRevenueTarget={Number(dashboard.monthlyRevenueTarget) || 0} />
-      </Card>
       <Card title="Klantherkenning en ontdubbeling">
         <p className="mb-4 text-sm text-stone-600">
           Bij elke nieuwe aanvraag, invoer of import berekent Atlas een score per bestaande klant. Vanaf de bovenste drempel wordt automatisch gekoppeld; tussen de twee drempels verschijnt een melding &lsquo;Mogelijk dubbel&rsquo;; daaronder wordt het een nieuwe klant.

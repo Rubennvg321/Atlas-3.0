@@ -6,7 +6,7 @@ import { intakeLead } from "@/server/intake";
 import { changeStage } from "@/server/trajects";
 import { setManualFinance } from "@/server/finance";
 import { setSetting } from "@/server/settings";
-import { getBestCustomerOfMonth, getBusinessStats, getUnlinkedAppointments } from "@/server/dashboard";
+import { getBestCustomerOfMonth, getBusinessStats, getRevenueBreakdown, getUnlinkedAppointments } from "@/server/dashboard";
 import { linkAppointmentToCustomer } from "@/server/integrations/calendar-sync";
 import { db, lead, resetDb, uid } from "./helpers";
 
@@ -93,6 +93,57 @@ describe("dashboard: Bedrijfsstand", () => {
     expect(s.revenueMonth).toBe(4000);
     expect(s.targetPct).toBe(125);
     expect(s.montagesPlanned).toBe(1);
+  });
+});
+
+describe("dashboard: Omzet per klant", () => {
+  it("toont per maand en per jaar welke klanten voor de omzet zorgen, gelijk aan de tegels", async () => {
+    const a = await traject("Klant Een", "in_uitvoering");
+    await setManualFinance(db(), a, { saleAmountExcl: 4000 });
+    await montage(a, "2026-11-03");
+    const b = await traject("Klant Twee", "montage_gepland");
+    await setManualFinance(db(), b, { saleAmountExcl: 6000 });
+    await montage(b, "2026-11-20");
+    const zonder = await traject("Klant Drie", "montage_gepland");
+    await montage(zonder, "2026-11-25");
+    const okt = await traject("Klant Vier", "review_gestuurd");
+    await setManualFinance(db(), okt, { saleAmountExcl: 2500 });
+    await montage(okt, "2026-10-08");
+    // Na deze maand: telt niet in "Omzet 2026" (t/m deze maand), wel in december zelf.
+    const dec = await traject("Klant Vijf", "montage_gepland");
+    await setManualFinance(db(), dec, { saleAmountExcl: 1000 });
+    await montage(dec, "2026-12-02");
+    // Vervallen: telt niet.
+    const weg = await traject("Klant Zes", "vervallen");
+    await setManualFinance(db(), weg, { saleAmountExcl: 9000 });
+    await montage(weg, "2026-11-10");
+    await setSetting(db(), "dashboard", { monthlyRevenueTarget: 20000 });
+
+    const stats = await getBusinessStats(db(), NOW);
+    expect(stats.month).toBe("2026-11");
+
+    const nov = await getRevenueBreakdown(db(), "2026-11", NOW);
+    expect(nov.kind).toBe("month");
+    expect(nov.total).toBe(stats.revenueMonth);
+    expect(nov.lines.map((l) => [l.name, l.amount])).toEqual([
+      ["Klant Twee", 6000],
+      ["Klant Een", 4000],
+      ["Klant Drie", null],
+    ]);
+    expect(nov.withoutAmount).toBe(1);
+    expect(nov.targetPct).toBe(50);
+
+    const jaar = await getRevenueBreakdown(db(), "2026", NOW);
+    expect(jaar.kind).toBe("year");
+    expect(jaar.untilMonth).toBe("2026-11");
+    expect(jaar.total).toBe(stats.revenueYear);
+    expect(jaar.total).toBe(12500);
+    expect(jaar.targetPct).toBeNull();
+    expect(jaar.years).toEqual(["2026"]);
+    expect(jaar.months).toEqual(["2026-12", "2026-11", "2026-10"]);
+
+    expect((await getRevenueBreakdown(db(), "2026-12", NOW)).total).toBe(1000);
+    expect((await getRevenueBreakdown(db(), "onzin", NOW)).period).toBe("2026-11");
   });
 });
 

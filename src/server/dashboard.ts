@@ -14,6 +14,8 @@ import { getSetting } from "./settings";
  */
 export interface BusinessStats {
   year: number;
+  /** Huidige maand als "JJJJ-MM". */
+  month: string;
   revenueMonth: number;
   revenueYear: number;
   plannedRevenue: number;
@@ -31,6 +33,7 @@ export async function getBusinessStats(db: DbOrTx, now: Date = new Date()): Prom
   const nowIso = now.toISOString();
   const [row] = await db.execute<{
     year: number;
+    month: string;
     revenue_month: string | null;
     revenue_year: string | null;
     planned_revenue: string | null;
@@ -66,6 +69,7 @@ export async function getBusinessStats(db: DbOrTx, now: Date = new Date()): Prom
     )
     select
       extract(year from p.today)::int as year,
+      to_char(p.today, 'YYYY-MM') as month,
       (select sum(amount) from t where montage_date >= p.month_start and montage_date < p.next_month) as revenue_month,
       (select sum(amount) from t where montage_date >= p.year_start and montage_date < p.next_month) as revenue_year,
       (select sum(amount) from t where kind = 'won' and (montage_date is null or montage_date >= p.next_month)) as planned_revenue,
@@ -80,6 +84,7 @@ export async function getBusinessStats(db: DbOrTx, now: Date = new Date()): Prom
   const revenueMonth = Number(row?.revenue_month ?? 0);
   return {
     year: row?.year ?? now.getFullYear(),
+    month: row?.month ?? now.toISOString().slice(0, 7),
     revenueMonth,
     revenueYear: Number(row?.revenue_year ?? 0),
     plannedRevenue: Number(row?.planned_revenue ?? 0),
@@ -258,4 +263,118 @@ export async function getBestCustomerOfMonth(db: DbOrTx, month?: string | null, 
   const months = [...new Set([current, chosen, ...monthRows.map((r) => r.m)])].sort().reverse();
 
   return { month: chosen, months, ranking, incomplete };
+}
+
+export interface RevenueLine {
+  trajectId: string;
+  trajectNumber: number;
+  customerId: string;
+  name: string;
+  city: string | null;
+  /** Eerste montagedag (JJJJ-MM-DD, Nederlandse tijd). */
+  montageDate: string;
+  /** Verkoopbedrag excl. btw, of null als er nog geen bedrag bekend is. */
+  amount: number | null;
+}
+
+export interface RevenueBreakdown {
+  /** Gekozen periode: "JJJJ-MM" (maand) of "JJJJ" (jaar). */
+  period: string;
+  kind: "month" | "year";
+  /** Voor het lopende jaar telt Atlas t/m de huidige maand (zoals de tegel "Omzet JJJJ"). */
+  untilMonth: string | null;
+  /** Keuzes voor het menu, nieuwste eerst: eerst de jaren, dan de maanden. */
+  years: string[];
+  months: string[];
+  total: number;
+  /** Klanten met hun trajecten, grootste bedrag eerst. Trajecten zonder bedrag onderaan. */
+  lines: RevenueLine[];
+  withoutAmount: number;
+  monthlyTarget: number;
+  /** Percentage van het maanddoel (alleen bij een maand met doel). */
+  targetPct: number | null;
+}
+
+const YEAR_RE = /^\d{4}$/;
+
+/**
+ * Welke klanten zorgen voor de omzet van een maand of jaar? Zelfde regels als
+ * de tegels in "Bedrijfsstand": verkoopbedrag = WeFact-offerte (geaccepteerd
+ * gaat voor), anders handmatige prijs; omzet telt in de maand waarin de eerste
+ * geplande montage begint; vervallen en verwijderde trajecten tellen niet.
+ */
+export async function getRevenueBreakdown(db: DbOrTx, period?: string | null, now: Date = new Date()): Promise<RevenueBreakdown> {
+  const current = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit" }).format(now).slice(0, 7);
+  const chosen = period && (MONTH_RE.test(period) || YEAR_RE.test(period)) ? period : current;
+  const kind = YEAR_RE.test(chosen) ? "year" : "month";
+  const from = kind === "year" ? `${chosen}-01-01` : `${chosen}-01`;
+  const untilMonth = kind === "year" && chosen === current.slice(0, 4) ? current : null;
+  // Eind (exclusief): volgende maand, of volgend jaar; lopend jaar t/m de huidige maand.
+  const to = untilMonth ? sql`(${`${untilMonth}-01`}::date + interval '1 month')` : kind === "year" ? sql`(${from}::date + interval '1 year')` : sql`(${from}::date + interval '1 month')`;
+
+  const rows = await db.execute<{
+    traject_id: string;
+    number: number;
+    customer_id: string;
+    name: string;
+    city: string | null;
+    montage_date: string;
+    amount: string | null;
+  }>(sql`
+    with t as (
+      select tr.id, tr.number, tr.customer_id, tr.site_city, tr.sale_amount_excl_manual,
+        (select min((a.starts_at at time zone 'Europe/Amsterdam')::date) from appointments a
+          where a.traject_id = tr.id and a.kind = 'montage' and a.status = 'gepland' and a.deleted_at is null) as montage_date
+      from trajects tr
+      join pipeline_stages ps on ps.key = tr.stage
+      where tr.deleted_at is null and ps.kind <> 'lost'
+    )
+    select t.id as traject_id, t.number, c.id as customer_id, c.display_name as name, coalesce(t.site_city, c.city) as city,
+      to_char(t.montage_date, 'YYYY-MM-DD') as montage_date,
+      coalesce(
+        (select q.amount_excl from quotes q
+          where q.traject_id = t.id and q.deleted_at is null and q.amount_excl is not null
+          order by (q.status = 'geaccepteerd') desc, q.quote_date desc, q.created_at desc
+          limit 1),
+        t.sale_amount_excl_manual
+      )::text as amount
+    from t
+    join customers c on c.id = t.customer_id
+    where t.montage_date >= ${from}::date and t.montage_date < ${to}
+  `);
+
+  const lines: RevenueLine[] = rows
+    .map((r) => ({
+      trajectId: r.traject_id,
+      trajectNumber: Number(r.number),
+      customerId: r.customer_id,
+      name: r.name,
+      city: r.city,
+      montageDate: r.montage_date,
+      amount: r.amount === null ? null : Number(r.amount),
+    }))
+    .sort((a, b) => (b.amount ?? -Infinity) - (a.amount ?? -Infinity) || a.montageDate.localeCompare(b.montageDate) || a.name.localeCompare(b.name, "nl"));
+  const total = Math.round(lines.reduce((s, l) => s + (l.amount ?? 0), 0) * 100) / 100;
+
+  const monthRows = await db.execute<{ m: string }>(sql`
+    select distinct to_char((a.starts_at at time zone 'Europe/Amsterdam'), 'YYYY-MM') as m
+      from appointments a join trajects tr on tr.id = a.traject_id
+     where a.kind = 'montage' and a.status = 'gepland' and a.deleted_at is null and tr.deleted_at is null
+  `);
+  const months = [...new Set([current, ...(kind === "month" ? [chosen] : []), ...monthRows.map((r) => r.m)])].sort().reverse();
+  const years = [...new Set([...months.map((m) => m.slice(0, 4)), ...(kind === "year" ? [chosen] : [])])].sort().reverse();
+
+  const target = Number((await getSetting(db, "dashboard")).monthlyRevenueTarget) || 0;
+  return {
+    period: chosen,
+    kind,
+    untilMonth,
+    years,
+    months,
+    total,
+    lines,
+    withoutAmount: lines.filter((l) => l.amount === null).length,
+    monthlyTarget: target,
+    targetPct: kind === "month" && target > 0 ? Math.round((total / target) * 100) : null,
+  };
 }

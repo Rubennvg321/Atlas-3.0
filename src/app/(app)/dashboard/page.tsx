@@ -1,21 +1,24 @@
 import { getDb } from "@/db";
 import { openTrajectOptions } from "@/server/queries";
-import { getBestCustomerOfMonth, getBusinessStats, getUnlinkedAppointments } from "@/server/dashboard";
+import { getBestCustomerOfMonth, getBusinessStats, getRevenueBreakdown, getUnlinkedAppointments } from "@/server/dashboard";
 import { PageHeader } from "@/components/server-ui";
 import { BusinessStatsWidget } from "@/components/widgets/business-stats";
+import { RevenueBreakdownWidget } from "@/components/widgets/revenue-breakdown";
 import { BestCustomerWidget } from "@/components/widgets/best-customer";
 import { UnlinkedAppointmentsWidget } from "@/components/widgets/unlinked-appointments";
 
 export const metadata = { title: "Dashboard" };
 
-export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ maand?: string }> }) {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ maand?: string; omzet?: string }> }) {
   const sp = await searchParams;
   const db = getDb();
   const [stats, best, unlinked, trajectOptions] = await Promise.all([getBusinessStats(db), getBestCustomerOfMonth(db, sp.maand), getUnlinkedAppointments(db), openTrajectOptions(db)]);
+  const revenue = sp.omzet ? await getRevenueBreakdown(db, sp.omzet) : null;
   return (
     <div className="space-y-4">
       <PageHeader title="Dashboard" />
-      <BusinessStatsWidget s={stats} />
+      <BusinessStatsWidget s={stats} open={revenue?.period ?? null} />
+      {revenue && <RevenueBreakdownWidget data={revenue} />}
       <BestCustomerWidget data={best} />
       <UnlinkedAppointmentsWidget items={unlinked} trajectOptions={trajectOptions} />
     </div>

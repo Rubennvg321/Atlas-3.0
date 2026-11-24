@@ -2,8 +2,8 @@ import { eq } from "drizzle-orm";
 import type { DbOrTx } from "@/db";
 import { integrations, syncRuns } from "@/db/schema";
 
-/** Koppelingen: google (tokens), gmail, google_calendar, wefact, dagelijks. */
-export type Provider = "google" | "gmail" | "google_calendar" | "wefact" | "dagelijks" | "push";
+/** Koppelingen: google (tokens), gmail, google_calendar, wefact, dagelijks, google_maps (adres zoeken). */
+export type Provider = "google" | "gmail" | "google_calendar" | "wefact" | "dagelijks" | "push" | "google_maps";
 
 export interface IntegrationConfig {
   nextRunAt?: string;

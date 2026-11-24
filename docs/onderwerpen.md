@@ -17,6 +17,8 @@ Welke gebeurtenis naar welke fase, automatisch of voorstel.
 *"Ik wil iets aanpassen aan klanten, 'Mogelijk dubbel' of samenvoegen."*
 `src/lib/normalize.ts`, `src/lib/matching/`, `src/server/customers.ts`, `src/server/intake.ts`, `src/server/merge.ts`,
 `src/server/customer-edit.ts`, `src/app/(app)/klanten/`, `src/app/(app)/dubbels/`
+Adres zoeken via Google bij adresvelden (sleutel in Koppelingen → Adres zoeken via Google; Places API (New)):
+`src/components/address-search.tsx`, `src/lib/places.ts`, `src/server/integrations/places-client.ts`
 
 ## 4. Traject-detail, taken en notities
 *"Ik wil iets aanpassen aan de detailpagina van een traject of aan taken."*

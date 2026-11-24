@@ -7,6 +7,7 @@ import { addNoteAction, addTaskAction, deleteTaskAction, moveTrajectAction, togg
 import { isOverdue, relativeDays, shortDate } from "@/lib/format";
 import { StageSelect, type StageOption } from "./stage-control";
 import { Button, Field, FormMessage, Input, SubmitButton, Textarea } from "./ui";
+import { AddressSearch } from "./address-search";
 
 export function TrajectStageControl({ trajectId, stage, version, stages }: { trajectId: string; stage: string; version: number; stages: StageOption[] }) {
   const router = useRouter();
@@ -153,6 +154,9 @@ export function TrajectEditForm({
         </Field>
         <fieldset className="rounded-lg border border-stone-200 p-3">
           <legend className="px-1 text-xs font-medium text-stone-600">Afwijkend montageadres (leeg = klantadres)</legend>
+          <div className="mb-2">
+            <AddressSearch fields={{ street: "siteStreet", houseNumber: "siteHouseNumber", addition: "siteHouseNumberAddition", postcode: "sitePostcode", city: "siteCity" }} />
+          </div>
           <div className="grid grid-cols-6 gap-2">
             <Field label="Straat" className="col-span-4">
               <Input name="siteStreet" defaultValue={traject.siteStreet ?? ""} />

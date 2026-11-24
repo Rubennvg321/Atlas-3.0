@@ -26,7 +26,9 @@ import { liveWefact } from "@/server/integrations/wefact-client";
 import { getWefactClient, linkQuoteToTraject } from "@/server/integrations/wefact-sync";
 import { addPurchaseDocument, deletePurchaseDocument, validateDocument } from "@/server/purchase-documents";
 import { cfg, friendlyError, getIntegration, upsertIntegration, type Provider } from "@/server/integrations/state";
-import { encrypt } from "@/server/crypto";
+import { decrypt, encrypt } from "@/server/crypto";
+import { livePlaces } from "@/server/integrations/places-client";
+import type { AddressFields, AddressSuggestion } from "@/lib/places";
 import { audit } from "@/server/timeline";
 import { linkAppointmentToCustomer } from "@/server/integrations/calendar-sync";
 
@@ -532,6 +534,64 @@ export async function saveWefactKeyAction(_prev: ActionResult | null, fd: FormDa
   return { ok: true };
 }
 
+export async function saveMapsKeyAction(_prev: ActionResult | null, fd: FormData): Promise<ActionResult> {
+  const user = await requireUser();
+  const key = str(fd, "apiKey");
+  if (!key) return { ok: false, error: "Vul de API-sleutel in." };
+  try {
+    await livePlaces(key).autocomplete("Kerkstraat 1 Nijmegen", crypto.randomUUID());
+  } catch (e) {
+    return { ok: false, error: placesError(e) };
+  }
+  await upsertIntegration(getDb(), "google_maps", { encryptedTokens: encrypt(key), status: "gekoppeld", lastError: null });
+  await audit(getDb(), user.id, "google_maps_connect", "integration", "google_maps");
+  revalidatePath("/koppelingen");
+  return { ok: true };
+}
+
+function placesError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/API_KEY_INVALID|API key not valid|400/i.test(msg)) return "Google kent deze API-sleutel niet. Kopieer hem opnieuw uit Google Cloud.";
+  if (/PERMISSION_DENIED|403|not been used|disabled|billing/i.test(msg))
+    return "Google weigert: zet 'Places API (New)' aan in Google Cloud, koppel een betaalaccount, en controleer dat de sleutel IP-adres 51.15.84.246 toestaat.";
+  if (/429|RESOURCE_EXHAUSTED/i.test(msg)) return "Te veel zoekopdrachten. Probeer het over een minuut opnieuw.";
+  return friendlyError(e);
+}
+
+async function placesClient() {
+  const row = await getIntegration(getDb(), "google_maps");
+  return row?.encryptedTokens ? livePlaces(decrypt(row.encryptedTokens)) : null;
+}
+
+export type AddressSearchResult = { ok: true; configured: boolean; suggestions: AddressSuggestion[] } | { ok: false; error: string };
+
+/** Adres zoeken terwijl je typt (Google). Zonder sleutel: configured=false. */
+export async function searchAddressAction(input: string, sessionToken: string): Promise<AddressSearchResult> {
+  await requireUser();
+  const q = input.trim().slice(0, 200);
+  const places = await placesClient();
+  if (!places) return { ok: true, configured: false, suggestions: [] };
+  if (q.length < 3) return { ok: true, configured: true, suggestions: [] };
+  try {
+    return { ok: true, configured: true, suggestions: await places.autocomplete(q, sessionToken.slice(0, 64)) };
+  } catch (e) {
+    console.error(e);
+    return { ok: false, error: placesError(e) };
+  }
+}
+
+export async function addressDetailsAction(placeId: string, sessionToken: string): Promise<ActionResult<AddressFields>> {
+  await requireUser();
+  const places = await placesClient();
+  if (!places) return { ok: false, error: "Adres zoeken staat uit. Zet het aan via Koppelingen." };
+  try {
+    return { ok: true, data: await places.details(placeId.slice(0, 300), sessionToken.slice(0, 64)) };
+  } catch (e) {
+    console.error(e);
+    return { ok: false, error: placesError(e) };
+  }
+}
+
 export async function retrySyncAction(provider: string) {
   await requireUser();
   const p = provider as Provider;
@@ -541,7 +601,7 @@ export async function retrySyncAction(provider: string) {
   revalidatePath("/koppelingen");
 }
 
-export async function disconnectAction(provider: "google" | "wefact") {
+export async function disconnectAction(provider: "google" | "wefact" | "google_maps") {
   const user = await requireUser();
   await upsertIntegration(getDb(), provider, { encryptedTokens: null, status: "niet_gekoppeld", account: null });
   if (provider === "google") for (const p of ["gmail", "google_calendar"] as const) await upsertIntegration(getDb(), p, { status: "niet_gekoppeld" });

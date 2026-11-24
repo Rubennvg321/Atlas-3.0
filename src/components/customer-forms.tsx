@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { addContactAction, addContactPointAction, createCustomerAction, removeContactAction, removeContactPointAction, undoMergeAction, updateCustomerAction } from "@/app/actions";
+import { AddressSearch } from "./address-search";
 import { Button, Field, FormMessage, Input, Select, SubmitButton, Textarea } from "./ui";
 
 export type NewCustomerDefaults = Partial<Record<"appointmentId" | "lastName" | "postcode" | "houseNumber" | "addition" | "street" | "city" | "message", string>>;
@@ -41,6 +42,7 @@ export function NewCustomerForm({ defaults = {} }: { defaults?: NewCustomerDefau
           <Input name="email2" type="email" inputMode="email" />
         </Field>
       </fieldset>
+      <AddressSearch />
       <fieldset className="grid grid-cols-6 gap-2">
         <Field label="Postcode" className="col-span-3 sm:col-span-2">
           <Input name="postcode" defaultValue={defaults.postcode} placeholder="1234 AB" autoCapitalize="characters" />
@@ -95,6 +97,7 @@ export function CustomerEditForm({
         <Field label="Naam (zoals op het bord)">
           <Input name="displayName" defaultValue={c.displayName} required />
         </Field>
+        <AddressSearch />
         <div className="grid grid-cols-6 gap-2">
           <Field label="Straat" className="col-span-4">
             <Input name="street" defaultValue={c.street ?? ""} />

@@ -13,6 +13,7 @@ const SECTIONS = [
   { href: "/dubbels", label: "Mogelijk dubbel", icon: "⧉" },
 ];
 const SYSTEM = [
+  { href: "/meldingen", label: "Meldingen", icon: "⚑" },
   { href: "/koppelingen", label: "Koppelingen", icon: "⇄" },
   { href: "/import", label: "Import", icon: "⇪" },
   { href: "/instellingen", label: "Instellingen", icon: "⚙" },
@@ -31,7 +32,7 @@ const MOBILE = [
 export function Nav({ duplicateCount, overdueCount }: { duplicateCount: number; overdueCount: number }) {
   const path = usePathname();
   const active = (href: string) =>
-    path === href || path.startsWith(href + "/") || (href === "/meer" && ["/import", "/instellingen", "/meer", "/koppelingen"].some((p) => path.startsWith(p)));
+    path === href || path.startsWith(href + "/") || (href === "/meer" && ["/import", "/instellingen", "/meer", "/koppelingen", "/meldingen"].some((p) => path.startsWith(p)));
   const badge = (href: string) => (href === "/dubbels" ? duplicateCount : href === "/taken" ? overdueCount : 0);
   const SideLink = ({ i }: { i: { href: string; label: string; icon: string } }) => (
     <Link

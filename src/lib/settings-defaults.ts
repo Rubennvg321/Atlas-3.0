@@ -61,6 +61,8 @@ export const DEFAULT_SETTINGS = {
       { supplier: "fedi", from: "fedi.de", parser: "fedi-mail" },
     ],
   },
+  /** Meldingen per soort aan (true) of uit (false). Zie src/lib/notification-types.ts. */
+  notifications: { types: { nieuwe_lead: true } as Record<string, boolean> },
   /** Dagen zonder volgende actie waarna een kaart opvalt. */
   board: { staleAfterDays: 7 },
   /** Dashboard: omzetdoel per maand (excl. btw). 0 = geen doel. */

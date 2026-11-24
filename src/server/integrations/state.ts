@@ -3,7 +3,7 @@ import type { DbOrTx } from "@/db";
 import { integrations, syncRuns } from "@/db/schema";
 
 /** Koppelingen: google (tokens), gmail, google_calendar, wefact, dagelijks. */
-export type Provider = "google" | "gmail" | "google_calendar" | "wefact" | "dagelijks";
+export type Provider = "google" | "gmail" | "google_calendar" | "wefact" | "dagelijks" | "push";
 
 export interface IntegrationConfig {
   nextRunAt?: string;

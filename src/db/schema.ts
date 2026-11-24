@@ -509,3 +509,43 @@ export const auditLog = pgTable(
   },
   (t) => [index("audit_entity_idx").on(t.entity, t.entityId)],
 );
+
+// ---------------------------------------------------------------------------
+// Meldingen (pushmeldingen naar telefoon/computer)
+// ---------------------------------------------------------------------------
+
+/** Een apparaat (browser of geïnstalleerde app) dat meldingen wil ontvangen. */
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: id(),
+  userId: uuid("user_id").references(() => users.id),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  /** Herkenbare naam, bv. "iPhone" of "Chrome op Mac". */
+  label: text("label"),
+  createdAt: createdAt(),
+  lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+  failures: integer("failures").notNull().default(0),
+});
+
+/**
+ * Wachtrij én logboek van meldingen. `refKey` is uniek per gebeurtenis (bv.
+ * "nieuwe_lead:gmail:abc"), zodat opnieuw verwerken nooit een tweede melding geeft.
+ */
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: id(),
+    type: text("type").notNull(),
+    refKey: text("ref_key").notNull().unique(),
+    title: text("title").notNull(),
+    body: text("body"),
+    url: text("url"),
+    /** pending | sent | skipped (soort staat uit of geen apparaten) | failed */
+    status: text("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    createdAt: createdAt(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+  },
+  (t) => [index("notifications_status_idx").on(t.status, t.createdAt)],
+);

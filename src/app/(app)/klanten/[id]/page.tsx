@@ -7,6 +7,7 @@ import { Badge, Card, PageHeader, stageColor } from "@/components/server-ui";
 import { ContactForm, ContactPointForm, CustomerEditForm, RemoveButton, UndoMergeButton } from "@/components/customer-forms";
 import { ConfirmAction } from "@/components/traject-client";
 import { Timeline } from "@/components/timeline";
+import { CopyButton } from "@/components/copy-button";
 import { anonymizeCustomerAction, newTrajectAction } from "@/app/actions";
 import { date, euro } from "@/lib/format";
 import { QuotePdfLink } from "@/components/quote-pdf-link";
@@ -22,6 +23,7 @@ export default async function CustomerPage({ params, searchParams }: { params: P
   if (d.customer.mergedIntoId) redirect(`/klanten/${d.customer.mergedIntoId}`);
   const stages = await getStages(db);
   const c = d.customer;
+  const streetLine = [c.street, [c.houseNumber, c.houseNumberAddition].filter(Boolean).join("")].filter(Boolean).join(" ");
   return (
     <div className="space-y-4">
       {melding === "samengevoegd" && <p className="rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800">Klanten samengevoegd. Je kunt dit hieronder ongedaan maken.</p>}
@@ -31,7 +33,14 @@ export default async function CustomerPage({ params, searchParams }: { params: P
           ⚠ Mogelijk dubbel met een andere klant: bekijk en beslis →
         </Link>
       )}
-      <PageHeader title={c.displayName}>
+      <PageHeader
+        title={
+          <span className="inline-flex items-center gap-1">
+            {c.displayName}
+            <CopyButton text={c.displayName} label="Naam" />
+          </span>
+        }
+      >
         <form action={newTrajectAction.bind(null, c.id)}>
           <button className="rounded-lg bg-stone-900 px-3 py-2 text-sm text-white">+ Nieuw traject</button>
         </form>
@@ -39,12 +48,17 @@ export default async function CustomerPage({ params, searchParams }: { params: P
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4">
           <Card title="Adres" actions={<CustomerEditForm c={c} />}>
-            <p className="text-sm">
-              {[c.street, [c.houseNumber, c.houseNumberAddition].filter(Boolean).join("")].filter(Boolean).join(" ") || <span className="text-stone-500">Straat/huisnummer onbekend</span>}
-            </p>
-            <p className="text-sm">
-              {formatPostcode(c.postcode)} {c.city}
-            </p>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm">{streetLine || <span className="text-stone-500">Straat/huisnummer onbekend</span>}</p>
+                <p className="text-sm">
+                  {formatPostcode(c.postcode)} {c.city}
+                </p>
+              </div>
+              {(streetLine || c.postcode || c.city) && (
+                <CopyButton text={[streetLine, [formatPostcode(c.postcode), c.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")} label="Adres" />
+              )}
+            </div>
             {c.notes && <p className="mt-3 whitespace-pre-line border-t border-stone-100 pt-3 text-sm text-stone-700">{c.notes}</p>}
             {c.wefactDebtorCode && <p className="mt-2 text-xs text-stone-500">WeFact-debiteur: {c.wefactDebtorCode}</p>}
           </Card>
@@ -52,10 +66,13 @@ export default async function CustomerPage({ params, searchParams }: { params: P
             <ul className="space-y-1.5 text-sm">
               {d.contactPoints.map((cp) => (
                 <li key={cp.id} className="flex items-center justify-between gap-2">
-                  <a className="text-sky-700 underline" href={cp.kind === "email" ? `mailto:${cp.normalized}` : `tel:${cp.normalized}`}>
-                    {cp.kind === "phone" ? "☎ " : "✉ "}
-                    {cp.value}
-                  </a>
+                  <span className="flex min-w-0 items-center gap-1">
+                    <a className="break-all text-sky-700 underline" href={cp.kind === "email" ? `mailto:${cp.normalized}` : `tel:${cp.normalized}`}>
+                      {cp.kind === "phone" ? "☎ " : "✉ "}
+                      {cp.value}
+                    </a>
+                    <CopyButton text={cp.value} label={cp.kind === "email" ? "E-mailadres" : "Telefoonnummer"} />
+                  </span>
                   <RemoveButton kind="point" id={cp.id} customerId={c.id} />
                 </li>
               ))}
@@ -66,9 +83,14 @@ export default async function CustomerPage({ params, searchParams }: { params: P
             <ul className="space-y-1.5 text-sm">
               {d.contacts.map((p) => (
                 <li key={p.id} className="flex items-center justify-between">
-                  <span>
-                    {displayName({ firstName: p.firstName, infix: p.infix, lastName: p.lastName })}
-                    {p.role && <span className="text-stone-500"> · {p.role}</span>}
+                  <span className="flex items-center gap-1">
+                    <span>
+                      {displayName({ firstName: p.firstName, infix: p.infix, lastName: p.lastName })}
+                      {p.role && <span className="text-stone-500"> · {p.role}</span>}
+                    </span>
+                    {displayName({ firstName: p.firstName, infix: p.infix, lastName: p.lastName }) && (
+                      <CopyButton text={displayName({ firstName: p.firstName, infix: p.infix, lastName: p.lastName })} label="Naam" />
+                    )}
                   </span>
                   <RemoveButton kind="contact" id={p.id} customerId={c.id} />
                 </li>

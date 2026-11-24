@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useTransition } from "react";
-import { disconnectAction, retrySyncAction, saveReviewSettingsAction, saveWefactKeyAction } from "@/app/actions";
+import { disconnectAction, retrySyncAction, saveMapsKeyAction, saveReviewSettingsAction, saveWefactKeyAction } from "@/app/actions";
 import { Button, Field, FormMessage, Input, SubmitButton, Textarea } from "./ui";
 
 export function RetryButton({ provider }: { provider: string }) {
@@ -13,7 +13,7 @@ export function RetryButton({ provider }: { provider: string }) {
   );
 }
 
-export function DisconnectButton({ provider }: { provider: "google" | "wefact" }) {
+export function DisconnectButton({ provider }: { provider: "google" | "wefact" | "google_maps" }) {
   const [pending, start] = useTransition();
   return (
     <Button
@@ -36,6 +36,20 @@ export function WefactKeyForm({ connected }: { connected: boolean }) {
       </Field>
       <FormMessage state={state} />
       {state?.ok && <p className="text-sm text-emerald-700">Gekoppeld. De eerste offertes worden binnen een minuut opgehaald.</p>}
+      <SubmitButton pendingText="Controleren…">Opslaan en testen</SubmitButton>
+    </form>
+  );
+}
+
+export function MapsKeyForm({ connected }: { connected: boolean }) {
+  const [state, action] = useActionState(saveMapsKeyAction, null);
+  return (
+    <form action={action} className="space-y-2">
+      <Field label={connected ? "Nieuwe API-sleutel (alleen invullen om te vervangen)" : "API-sleutel uit Google Cloud (Places API (New))"}>
+        <Input name="apiKey" type="password" autoComplete="off" placeholder="Plak hier de API-sleutel (begint met AIza)" />
+      </Field>
+      <FormMessage state={state} />
+      {state?.ok && <p className="text-sm text-emerald-700">Werkt. Je kunt nu bij elk adresveld zoeken via Google.</p>}
       <SubmitButton pendingText="Controleren…">Opslaan en testen</SubmitButton>
     </form>
   );

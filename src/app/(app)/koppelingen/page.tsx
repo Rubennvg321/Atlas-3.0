@@ -4,7 +4,7 @@ import { syncRuns } from "@/db/schema";
 import { getIntegration } from "@/server/integrations/state";
 import { getSetting } from "@/server/settings";
 import { Badge, Card, PageHeader } from "@/components/server-ui";
-import { DisconnectButton, RetryButton, ReviewSettingsForm, WefactKeyForm } from "@/components/koppelingen-client";
+import { DisconnectButton, MapsKeyForm, RetryButton, ReviewSettingsForm, WefactKeyForm } from "@/components/koppelingen-client";
 import { dateTime } from "@/lib/format";
 
 export const metadata = { title: "Koppelingen" };
@@ -45,7 +45,7 @@ async function SyncLine({ provider, label }: { provider: "gmail" | "google_calen
 export default async function KoppelingenPage({ searchParams }: { searchParams: Promise<{ gekoppeld?: string; fout?: string }> }) {
   const sp = await searchParams;
   const db = getDb();
-  const [google, wefact, reviews] = await Promise.all([getIntegration(db, "google"), getIntegration(db, "wefact"), getSetting(db, "reviews")]);
+  const [google, wefact, maps, reviews] = await Promise.all([getIntegration(db, "google"), getIntegration(db, "wefact"), getIntegration(db, "google_maps"), getSetting(db, "reviews")]);
   const googleConnected = !!google?.encryptedTokens;
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -80,6 +80,13 @@ export default async function KoppelingenPage({ searchParams }: { searchParams: 
             <SyncLine provider="wefact" label="Offertes · elke 15 minuten" />
           </div>
         )}
+      </Card>
+
+      <Card title={<span>Adres zoeken via Google <Status s={maps?.status} /></span>} actions={maps?.encryptedTokens ? <DisconnectButton provider="google_maps" /> : null}>
+        <p className="mb-3 text-sm text-stone-600">
+          Bij elk adresveld (nieuwe klant, klant bewerken, montageadres) kun je een adres opzoeken; Atlas vult dan straat, huisnummer, postcode en plaats in. Hiervoor is een API-sleutel van Google Cloud nodig met <strong>Places API (New)</strong> aan. Beperk de sleutel tot IP-adres <code className="rounded bg-stone-100 px-1">51.15.84.246</code>.
+        </p>
+        <MapsKeyForm connected={!!maps?.encryptedTokens} />
       </Card>
 
       <Card title="Dagelijkse controle">

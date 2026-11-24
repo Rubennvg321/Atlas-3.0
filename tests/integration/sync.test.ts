@@ -4,7 +4,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { closeDb } from "@/db";
 import { appointments, customers, emails, quotes, trajects } from "@/db/schema";
-import { syncCustomerMails, syncGmail, syncLeadMails, syncSupplierMails, syncWefactMails } from "@/server/integrations/gmail-sync";
+import { syncCustomerMails, syncGmail, syncHandledLabels, syncLeadMails, syncSupplierMails, syncWefactMails } from "@/server/integrations/gmail-sync";
 import { processEvent, syncCalendar } from "@/server/integrations/calendar-sync";
 import { syncWefact } from "@/server/integrations/wefact-sync";
 import { runDaily } from "@/server/daily";
@@ -59,6 +59,49 @@ describe("Gmail: aanvraagmails", () => {
     expect(await db().select().from(customers)).toHaveLength(0);
     expect(g.mails[0].labels).toContain("INBOX");
     expect(g.mails[0].labels).toContain("Label_2");
+  });
+});
+
+describe("Gmail: label 'Behandeld' na een afspraak", () => {
+  const behandeld = async (g: ReturnType<typeof fakeGmail>) => g.mails[0].labels?.includes(await g.ensureLabel("Behandeld"));
+
+  it("krijgt het label pas als er een afspraak met de klant in de agenda staat, en maar één keer", async () => {
+    const g = fakeGmail([leadMail("m1")]);
+    await syncLeadMails(db(), g);
+    expect(await syncHandledLabels(db(), g)).toBe(0);
+    expect(await behandeld(g)).toBe(false);
+
+    const [t] = await db().select().from(trajects);
+    // Geannuleerde afspraak telt niet.
+    await db().insert(appointments).values({
+      trajectId: t.id, customerId: t.customerId, kind: "advies", title: "Adviesgesprek", status: "geannuleerd",
+      startsAt: new Date(Date.now() + 2 * 86400000), endsAt: new Date(Date.now() + 2 * 86400000 + 3600000),
+    });
+    expect(await syncHandledLabels(db(), g)).toBe(0);
+
+    await db().insert(appointments).values({
+      trajectId: t.id, customerId: t.customerId, kind: "advies", title: "Adviesgesprek",
+      startsAt: new Date(Date.now() + 3 * 86400000), endsAt: new Date(Date.now() + 3 * 86400000 + 3600000),
+    });
+    expect(await syncHandledLabels(db(), g)).toBe(1);
+    expect(await behandeld(g)).toBe(true);
+    expect(g.mails[0].labels).not.toContain("INBOX");
+
+    // Label handmatig weggehaald: Atlas zet het niet opnieuw.
+    const id = await g.ensureLabel("Behandeld");
+    g.mails[0].labels = g.mails[0].labels!.filter((l) => l !== id);
+    expect(await syncHandledLabels(db(), g)).toBe(0);
+  });
+
+  it("een oude afspraak van een eerdere klus telt niet", async () => {
+    const g = fakeGmail([leadMail("m1")]);
+    await syncLeadMails(db(), g);
+    const [t] = await db().select().from(trajects);
+    await db().insert(appointments).values({
+      customerId: t.customerId, kind: "montage", title: "Fam. Klein",
+      startsAt: new Date(Date.now() - 200 * 86400000), endsAt: new Date(Date.now() - 200 * 86400000 + 3600000),
+    });
+    expect(await syncHandledLabels(db(), g)).toBe(0);
   });
 });
 

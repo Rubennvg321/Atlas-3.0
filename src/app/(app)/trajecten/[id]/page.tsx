@@ -12,6 +12,7 @@ import { getTrajectFinance } from "@/server/finance";
 import { openProposals } from "@/server/automation";
 import { displayName } from "@/lib/normalize";
 import { QuotePdfLink } from "@/components/quote-pdf-link";
+import { CopyButton } from "@/components/copy-button";
 import { LinkQuoteByNumber } from "@/components/link-quote";
 
 const MELDINGEN: Record<string, { text: string; tone: string }> = {
@@ -53,9 +54,12 @@ export default async function TrajectPage({ params, searchParams }: { params: Pr
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <Link href={`/klanten/${c.id}`} className="text-xl font-semibold hover:underline">
-            {c.displayName}
-          </Link>
+          <span className="inline-flex items-center gap-1">
+            <Link href={`/klanten/${c.id}`} className="text-xl font-semibold hover:underline">
+              {c.displayName}
+            </Link>
+            <CopyButton text={c.displayName} label="Naam" />
+          </span>
           <p className="text-sm text-stone-500">
             Traject #{t.number}
             {t.title ? ` · ${t.title}` : ""} · gestart {date(t.createdAt)}
@@ -76,18 +80,25 @@ export default async function TrajectPage({ params, searchParams }: { params: Pr
         <div className="space-y-4">
           <Card title="Contact" actions={<Link href={`/klanten/${c.id}`} className="text-xs text-stone-600 underline">Klant bewerken</Link>}>
             <ul className="space-y-1.5 text-sm">
-              {d.contacts.map((p) => (
-                <li key={p.id}>
-                  {displayName({ firstName: p.firstName, infix: p.infix, lastName: p.lastName })}
-                  {p.role && <span className="text-stone-500"> · {p.role}</span>}
-                </li>
-              ))}
+              {d.contacts.map((p) => {
+                const name = displayName({ firstName: p.firstName, infix: p.infix, lastName: p.lastName });
+                return (
+                  <li key={p.id} className="flex items-center gap-1">
+                    <span>
+                      {name}
+                      {p.role && <span className="text-stone-500"> · {p.role}</span>}
+                    </span>
+                    {name && <CopyButton text={name} label="Naam" />}
+                  </li>
+                );
+              })}
               {d.contactPoints.map((cp) => (
-                <li key={cp.id}>
-                  <a className="text-sky-700 underline" href={cp.kind === "email" ? `mailto:${cp.normalized}` : `tel:${cp.normalized}`}>
+                <li key={cp.id} className="flex items-center gap-1">
+                  <a className="break-all text-sky-700 underline" href={cp.kind === "email" ? `mailto:${cp.normalized}` : `tel:${cp.normalized}`}>
                     {cp.kind === "phone" ? "☎ " : "✉ "}
                     {cp.value}
                   </a>
+                  <CopyButton text={cp.value} label={cp.kind === "email" ? "E-mailadres" : "Telefoonnummer"} />
                 </li>
               ))}
             </ul>
@@ -96,10 +107,18 @@ export default async function TrajectPage({ params, searchParams }: { params: Pr
           <Card title={hasSite ? "Montageadres (afwijkend)" : "Adres"} actions={<TrajectEditForm traject={t} />}>
             {addressLine || address.pc ? (
               <div className="text-sm">
-                <p>{addressLine || <span className="text-stone-500">Huisnummer onbekend</span>}</p>
-                <p>
-                  {formatPostcodeSafe(address.pc)} {address.city}
-                </p>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p>{addressLine || <span className="text-stone-500">Huisnummer onbekend</span>}</p>
+                    <p>
+                      {formatPostcodeSafe(address.pc)} {address.city}
+                    </p>
+                  </div>
+                  <CopyButton
+                    text={[addressLine, [formatPostcodeSafe(address.pc), address.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")}
+                    label="Adres"
+                  />
+                </div>
                 <a className="mt-1 inline-block text-xs text-sky-700 underline" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${mapsQuery}`}>
                   Route in Google Maps
                 </a>

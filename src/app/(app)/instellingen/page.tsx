@@ -51,6 +51,10 @@ export default async function SettingsPage() {
               Aanvraagmail: afzender <code className="rounded bg-stone-100 px-1">{r.from}</code>, onderwerp bevat <code className="rounded bg-stone-100 px-1">{r.subjectContains}</code>
             </p>
           ))}
+          <p>
+            Verwerkte aanvraag krijgt label <code className="rounded bg-stone-100 px-1">{intake.processedLabel}</code>; zodra er een afspraak met de klant in de agenda staat ook{" "}
+            <code className="rounded bg-stone-100 px-1">{intake.handledLabel}</code>
+          </p>
           <p>Agenda&apos;s die Atlas leest: {(calendar.calendars ?? []).map((c) => c.name).join(", ") || "hoofdagenda"}</p>
           <p>
             Adviesgesprek: titel met &ldquo;Advies gesprek&rdquo; of &ldquo;Adviesgesprek&rdquo; (klant via locatie en gast-e-mail)

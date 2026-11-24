@@ -8,6 +8,8 @@ export const DEFAULT_SETTINGS = {
     /** Label voor verwerkte aanvragen; de mail wordt daarna gearchiveerd. */
     processedLabel: "Atlas/Lead",
     unrecognizedLabel: "Atlas/Niet herkend",
+    /** Label voor een aanvraag zodra er met die klant een afspraak in de agenda staat. */
+    handledLabel: "Behandeld",
     /** Bij de eerste koppeling: aanvragen van de afgelopen zoveel dagen ophalen. */
     lookbackDays: 7,
   },

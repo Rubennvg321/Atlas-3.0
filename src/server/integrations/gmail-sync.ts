@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { DbOrTx } from "@/db";
-import { contactPoints, customers, emails, inboundItems, pipelineStages, purchaseDocuments, purchaseOrders, trajects } from "@/db/schema";
+import { appointments, contactPoints, customers, emails, inboundItems, pipelineStages, purchaseDocuments, purchaseOrders, trajects } from "@/db/schema";
 import { addresses, attachments, bodyHtml, bodyText, header, type GmailMessage } from "@/lib/mime";
 import { htmlToText, parseWebsiteForm } from "@/lib/intake/website-form";
 import { parsePpcOrder } from "@/lib/parsers/ppc";
@@ -28,6 +28,42 @@ async function oncePerMessage(db: DbOrTx, kind: string, id: string, fn: () => Pr
     .values({ provider: kind, externalId: id, payload: r.payload ?? {}, status: r.status, processedAt: new Date() })
     .onConflictDoNothing();
   return true;
+}
+
+/**
+ * 1b. Aanvraagmail krijgt het label "Behandeld" zodra er met die klant een afspraak
+ * (adviesgesprek of montage) in de agenda staat. Eén keer per mail; haal je het
+ * label in Gmail zelf weg, dan zet Atlas het niet opnieuw.
+ */
+export async function syncHandledLabels(db: DbOrTx, gmail: GmailClient): Promise<number> {
+  const s = await getSetting(db, "intakeFilters");
+  if (!s.handledLabel) return 0;
+  const rows = await db.execute<{ external_id: string }>(sql`
+    select i.external_id
+      from ${inboundItems} i
+      join ${customers} c on c.id = i.customer_id
+     where i.provider = 'website' and i.external_id like 'gmail:%' and i.status = 'done'
+       and not exists (select 1 from ${inboundItems} h where h.provider = 'gmail-behandeld' and h.external_id = i.external_id)
+       and exists (
+         select 1 from ${appointments} a
+          where a.deleted_at is null and a.status = 'gepland' and a.kind in ('advies', 'montage')
+            and (a.customer_id in (c.id, c.merged_into_id) or (i.traject_id is not null and a.traject_id = i.traject_id))
+            -- alleen afspraken na de aanvraag, niet een oude afspraak van een eerdere klus
+            and a.starts_at >= i.created_at - interval '14 days')
+     order by i.created_at
+     limit 100
+  `);
+  if (!rows.length) return 0;
+  const label = await gmail.ensureLabel(s.handledLabel);
+  let n = 0;
+  for (const r of rows) {
+    await oncePerMessage(db, "gmail-behandeld", r.external_id, async () => {
+      await gmail.modify(r.external_id.slice("gmail:".length), [label], []);
+      return { status: "done" };
+    });
+    n++;
+  }
+  return n;
 }
 
 /** 1. Aanvraagmails van het websiteformulier -> lead, label en archiveren. */
@@ -285,6 +321,7 @@ export async function syncCustomerMails(db: DbOrTx, gmail: GmailClient): Promise
 export async function syncGmail(db: DbOrTx, gmail: GmailClient): Promise<number> {
   let n = 0;
   n += await syncLeadMails(db, gmail);
+  n += await syncHandledLabels(db, gmail);
   n += await syncWefactMails(db, gmail);
   n += await syncSupplierMails(db, gmail);
   n += await syncCustomerMails(db, gmail);

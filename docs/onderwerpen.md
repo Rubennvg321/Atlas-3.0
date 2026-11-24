@@ -29,7 +29,7 @@ Welke gebeurtenis naar welke fase, automatisch of voorstel.
 
 ## 6. Gmail
 *"Ik wil iets aanpassen aan hoe Atlas mail verwerkt."*
-Aanvraagmails → lead + label "Atlas/Lead", orderbevestigingen PPC/fedi, "offerte online geaccepteerd", klantmail.
+Aanvraagmails → lead + label "Atlas/Lead", label "Behandeld" zodra er een afspraak staat, orderbevestigingen PPC/fedi, "offerte online geaccepteerd", klantmail.
 `src/server/integrations/gmail-sync.ts`, `gmail-client.ts`, `src/lib/intake/website-form.ts`, `src/lib/parsers/`,
 `src/lib/mime.ts`, `src/server/pdf.ts`
 

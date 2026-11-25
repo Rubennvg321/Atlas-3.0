@@ -4,6 +4,7 @@ import { PushSetup } from "@/components/push-setup";
 import { NotificationTypesForm } from "@/components/notification-types-form";
 import { getSetting } from "@/server/settings";
 import { getVapidPublicKey, listSubscriptions, notificationTypes, recentNotifications } from "@/server/notify";
+import { openArrivalRequests } from "@/server/arrival";
 
 export const metadata = { title: "Meldingen" };
 
@@ -12,10 +13,30 @@ const fmt = (d: Date | null) => (d ? d.toLocaleString("nl-NL", { timeZone: "Euro
 
 export default async function MeldingenPage() {
   const db = getDb();
-  const [publicKey, s, devices, recent] = await Promise.all([getVapidPublicKey(db), getSetting(db, "notifications"), listSubscriptions(db), recentNotifications(db, 15)]);
+  const [publicKey, s, devices, recent, openArrivals] = await Promise.all([
+    getVapidPublicKey(db),
+    getSetting(db, "notifications"),
+    listSubscriptions(db),
+    recentNotifications(db, 15),
+    openArrivalRequests(db),
+  ]);
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <PageHeader title="Meldingen" />
+      {openArrivals.length > 0 && (
+        <Card title="Nog te kiezen: aankomsttijd">
+          <ul className="divide-y divide-stone-100 text-sm">
+            {openArrivals.map((a) => (
+              <li key={a.id}>
+                <a href={`/aankomst/${a.id}`} className="flex justify-between gap-3 py-2">
+                  <span className="font-medium">{a.customer.displayName}</span>
+                  <span className="text-stone-500">montage {a.dateLabel} →</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       <Card title="Dit apparaat">
         <PushSetup publicKey={publicKey} />
       </Card>

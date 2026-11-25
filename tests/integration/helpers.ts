@@ -11,7 +11,7 @@ export async function resetDb() {
   await d.execute(sql`
     truncate table purchase_orders, audit_log, sync_runs, external_refs, integrations, inbound_items, customer_merges,
       duplicate_candidates, timeline_events, emails, notes, tasks, quotes, appointments, stage_proposals,
-      stage_changes, trajects, contact_points, contacts, customers, settings, notifications, push_subscriptions restart identity cascade
+      stage_changes, trajects, contact_points, contacts, customers, settings, notifications, push_subscriptions, arrival_requests restart identity cascade
   `);
   await seedDefaults(d);
 }

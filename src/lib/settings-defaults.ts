@@ -61,8 +61,23 @@ export const DEFAULT_SETTINGS = {
       { supplier: "fedi", from: "fedi.de", parser: "fedi-mail" },
     ],
   },
+  /**
+   * Aankomstmail: 2 dagen voor de eerste montagedag vraagt Atlas (pushmelding) hoe laat je
+   * aankomt; na je keuze krijgt de klant een mail. Zonder keuze gaat er nooit een mail.
+   */
+  arrivalMail: {
+    enabled: true,
+    /** Vanaf dit uur (Nederlandse tijd) op de dag twee dagen ervoor wordt het gevraagd. */
+    askHour: 8,
+    /** Nog niet gekozen? Om dit uur één herinnering. */
+    reminderHour: 16,
+    times: ["07:30", "07:45", "08:00", "08:15", "08:30"] as string[],
+    subject: "Uw traprenovatie op {datum}",
+    body:
+      "Beste {naam},\n\nOp {datum} komen wij uw trap renoveren. Wij verwachten om {tijd} uur bij u te zijn.\n\nMocht er iets veranderen of heeft u nog vragen, dan kunt u op deze e-mail reageren.\n\nMet vriendelijke groet,\nSteps & Stairs",
+  },
   /** Meldingen per soort aan (true) of uit (false). Zie src/lib/notification-types.ts. */
-  notifications: { types: { nieuwe_lead: true } as Record<string, boolean> },
+  notifications: { types: { nieuwe_lead: true, aankomsttijd: true } as Record<string, boolean> },
   /** Dagen zonder volgende actie waarna een kaart opvalt. */
   board: { staleAfterDays: 7 },
   /** Dashboard: omzetdoel per maand (excl. btw). 0 = geen doel. */

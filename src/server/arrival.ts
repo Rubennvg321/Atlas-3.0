@@ -12,7 +12,7 @@ import type { GmailClient } from "./integrations/gmail-client";
  * Aankomsttijd voor een montage:
  *  1. Twee dagen voor de eerste montagedag (vanaf `askHour`) maakt Atlas een vraag aan en
  *     stuurt een pushmelding "Hoe laat kom je aan bij …?" met een link naar /aankomst/<id>.
- *  2. Daar kies je een kwartier (bv. 07:45). Atlas mailt de klant direct via Gmail.
+ *  2. Daar kies je een kwartierblok (bv. 7:45–8:00). Atlas mailt de klant direct via Gmail.
  *  3. Nog niet gekozen om `reminderHour`? Eén herinnering. Zonder keuze gaat er nooit een mail.
  * Alles is idempotent: per traject en montagedag hoogstens één vraag en één mail per gekozen tijd.
  */
@@ -32,6 +32,21 @@ export function formatMontageDate(day: string) {
 export function formatTime(t: string) {
   const [h, m] = t.split(":");
   return `${Number(h)}.${m}`;
+}
+
+/**
+ * Tijdblokken uit de grenzen: ["07:30","07:45","08:00"] -> 07:30–07:45 en 07:45–08:00.
+ * Een keuze wordt bewaard als de begintijd van het blok.
+ */
+export function arrivalWindows(times: string[]) {
+  const t = [...new Set(times)].sort();
+  return t.slice(0, -1).map((from, i) => ({ from, to: t[i + 1] }));
+}
+
+/** "tussen 7.45 en 8.00" voor het blok dat om `from` begint. */
+export function formatWindow(from: string, times: string[]) {
+  const w = arrivalWindows(times).find((x) => x.from === from);
+  return w ? `tussen ${formatTime(w.from)} en ${formatTime(w.to)}` : `om ${formatTime(from)}`;
 }
 
 /**
@@ -139,7 +154,7 @@ export type ChooseResult = { ok: true; sentTo: string; changed: boolean } | { ok
  */
 export async function chooseArrivalTime(db: DbOrTx, id: string, time: string, gmail: GmailClient | null, now = new Date()): Promise<ChooseResult> {
   const s = await getSetting(db, "arrivalMail");
-  if (!s.times.includes(time)) return { ok: false, error: "Kies een van de tijden." };
+  if (!arrivalWindows(s.times).some((w) => w.from === time)) return { ok: false, error: "Kies een van de tijdblokken." };
   const [r] = await db.select().from(arrivalRequests).where(eq(arrivalRequests.id, id));
   if (!r) return { ok: false, error: "Deze vraag bestaat niet (meer)." };
   if (r.montageDate < dayKey(now)) return { ok: false, error: "Deze montage is al begonnen." };
@@ -174,7 +189,7 @@ export async function sendArrivalMail(db: DbOrTx, id: string, gmail: GmailClient
 
   const s = await getSetting(db, "arrivalMail");
   const changed = !!r.sentTime;
-  const vars = { naam: c.salutation, datum: formatMontageDate(r.montageDate), tijd: formatTime(r.chosenTime) };
+  const vars = { naam: c.salutation, datum: formatMontageDate(r.montageDate), tijd: formatWindow(r.chosenTime, s.times) };
   const subject = `${changed ? "Gewijzigd: " : ""}${fill(s.subject, vars)}`;
   try {
     await gmail.send(buildRawEmail({ to: c.email, subject, text: fill(s.body, vars) }));
@@ -191,7 +206,7 @@ export async function sendArrivalMail(db: DbOrTx, id: string, gmail: GmailClient
     customerId: r.customerId,
     trajectId: r.trajectId,
     type: "mail",
-    title: `${changed ? "Gewijzigde aankomsttijd" : "Aankomsttijd"} gemaild naar ${c.email}: ${formatTime(r.chosenTime)} uur op ${vars.datum}`,
+    title: `${changed ? "Gewijzigde aankomsttijd" : "Aankomsttijd"} gemaild naar ${c.email}: ${vars.tijd} uur op ${vars.datum}`,
   });
   return { ok: true, sentTo: c.email, changed };
 }
@@ -216,7 +231,7 @@ export async function getArrivalRequest(db: DbOrTx, id: string) {
   if (!r) return null;
   const c = await customerInfo(db, r.customerId);
   const s = await getSetting(db, "arrivalMail");
-  return { ...r, customer: c, times: s.times, dateLabel: formatMontageDate(r.montageDate) };
+  return { ...r, customer: c, windows: arrivalWindows(s.times), times: s.times, dateLabel: formatMontageDate(r.montageDate) };
 }
 
 export async function openArrivalRequests(db: DbOrTx, now = new Date()) {

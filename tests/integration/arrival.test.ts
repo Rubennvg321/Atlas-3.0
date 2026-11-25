@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { closeDb } from "@/db";
 import { appointments, arrivalRequests, notifications, timelineEvents } from "@/db/schema";
-import { blockStarts, chooseArrivalTime, planArrivalRequests, retryArrivalMails } from "@/server/arrival";
+import { arrivalWindows, blockStarts, chooseArrivalTime, formatWindow, planArrivalRequests, retryArrivalMails } from "@/server/arrival";
 import { intakeLead } from "@/server/intake";
 import { changeStage } from "@/server/trajects";
 import { db, lead, resetDb, uid } from "./helpers";
@@ -53,6 +53,17 @@ describe("aankomsttijd", () => {
     expect(blockStarts(["2026-12-04", "2026-12-07", "2026-12-08", "2026-12-14"])).toEqual(["2026-12-04", "2026-12-14"]);
   });
 
+  it("tijdblokken: 7:30–7:45, 7:45–8:00, 8:00–8:15, 8:15–8:30", () => {
+    const times = ["07:30", "07:45", "08:00", "08:15", "08:30"];
+    expect(arrivalWindows(times)).toEqual([
+      { from: "07:30", to: "07:45" },
+      { from: "07:45", to: "08:00" },
+      { from: "08:00", to: "08:15" },
+      { from: "08:15", to: "08:30" },
+    ]);
+    expect(formatWindow("07:45", times)).toBe("tussen 7.45 en 8.00");
+  });
+
   it("twee dagen ervoor vanaf 8 uur één vraag met pushmelding; niet eerder, niet dubbel", async () => {
     await montage(["2026-12-10", "2026-12-11"]);
     expect(await planArrivalRequests(db(), at("2026-12-08", 7))).toBe(0);
@@ -86,7 +97,7 @@ describe("aankomsttijd", () => {
     expect(m.to).toBe("peter@example.nl");
     expect(m.subject).toBe("Uw traprenovatie op donderdag 10 december");
     expect(m.text).toContain("Beste familie Jansen");
-    expect(m.text).toContain("om 7.45 uur");
+    expect(m.text).toContain("Wij verwachten tussen 7.45 en 8.00 uur bij u te zijn.");
 
     await chooseArrivalTime(db(), r.id, "07:45", g, at("2026-12-08", 10));
     expect(g.sent).toHaveLength(1);
@@ -95,18 +106,19 @@ describe("aankomsttijd", () => {
     expect(res2).toMatchObject({ ok: true, changed: true });
     expect(g.sent).toHaveLength(2);
     expect(readMail(g.sent[1]).subject).toMatch(/^Gewijzigd: /);
-    expect(readMail(g.sent[1]).text).toContain("om 8.15 uur");
+    expect(readMail(g.sent[1]).text).toContain("tussen 8.15 en 8.30 uur");
 
     const tl = await db().select().from(timelineEvents).where(eq(timelineEvents.trajectId, t.trajectId!));
-    expect(tl.some((e) => e.title.startsWith("Aankomsttijd gemaild naar peter@example.nl: 7.45 uur"))).toBe(true);
+    expect(tl.some((e) => e.title.startsWith("Aankomsttijd gemaild naar peter@example.nl: tussen 7.45 en 8.00 uur"))).toBe(true);
     expect(tl.some((e) => e.title.startsWith("Gewijzigde aankomsttijd"))).toBe(true);
   });
 
-  it("onbekende tijd wordt geweigerd", async () => {
+  it("onbekende tijd of de laatste grens (08:30) wordt geweigerd", async () => {
     await montage(["2026-12-10"]);
     await planArrivalRequests(db(), at("2026-12-08", 9));
     const [r] = await db().select().from(arrivalRequests);
     expect(await chooseArrivalTime(db(), r.id, "06:00", fakeGmail([]), at("2026-12-08", 9))).toMatchObject({ ok: false });
+    expect(await chooseArrivalTime(db(), r.id, "08:30", fakeGmail([]), at("2026-12-08", 9))).toMatchObject({ ok: false });
   });
 
   it("geen e-mailadres: geen mail, duidelijke melding", async () => {
@@ -130,7 +142,7 @@ describe("aankomsttijd", () => {
     expect(await retryArrivalMails(db(), g, at("2026-12-08", 10))).toBe(1);
     expect(await retryArrivalMails(db(), g, at("2026-12-08", 11))).toBe(0);
     expect(g.sent).toHaveLength(1);
-    expect(readMail(g.sent[0]).text).toContain("om 7.30 uur");
+    expect(readMail(g.sent[0]).text).toContain("tussen 7.30 en 7.45 uur");
   });
 
   it("nog niet gekozen om 16 uur: één herinnering", async () => {

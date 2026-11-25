@@ -40,7 +40,7 @@ export async function saveArrivalSettingsAction(_prev: ArrivalActionResult, fd: 
     .filter(Boolean)
     .map((t) => t.replace(".", ":"))
     .map((t) => (/^\d:\d{2}$/.test(t) ? `0${t}` : t));
-  if (!times.length || times.some((t) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(t))) return { ok: false, error: "Vul tijden in zoals 07:30, 07:45, 08:00." };
+  if (times.length < 2 || times.some((t) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(t))) return { ok: false, error: "Vul minstens twee tijden in, zoals 07:30, 07:45, 08:00." };
   const askHour = Number(v("askHour"));
   const reminderHour = Number(v("reminderHour"));
   if (!(askHour >= 5 && askHour <= 22) || !(reminderHour >= 5 && reminderHour <= 23)) return { ok: false, error: "Kies een uur tussen 5 en 23." };

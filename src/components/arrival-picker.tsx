@@ -3,8 +3,20 @@
 import { useActionState, useTransition } from "react";
 import { chooseArrivalAction } from "@/app/(app)/aankomst/actions";
 
-/** Grote kwartierknoppen; één tik = keuze vastleggen en de klant mailen. */
-export function ArrivalPicker({ id, times, current, disabled, shownError }: { id: string; times: string[]; current: string | null; disabled?: boolean; shownError?: string | null }) {
+/** Grote knoppen per kwartierblok; één tik = keuze vastleggen en de klant mailen. */
+export function ArrivalPicker({
+  id,
+  windows,
+  current,
+  disabled,
+  shownError,
+}: {
+  id: string;
+  windows: { from: string; to: string }[];
+  current: string | null;
+  disabled?: boolean;
+  shownError?: string | null;
+}) {
   const [state, action, actionPending] = useActionState(chooseArrivalAction, null);
   const [transitionPending, start] = useTransition();
   const pending = actionPending || transitionPending;
@@ -17,18 +29,18 @@ export function ArrivalPicker({ id, times, current, disabled, shownError }: { id
     });
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-        {times.map((t) => (
+      <div className="grid grid-cols-2 gap-2">
+        {windows.map((w) => (
           <button
-            key={t}
+            key={w.from}
             type="button"
-            onClick={() => choose(t)}
+            onClick={() => choose(w.from)}
             disabled={pending || disabled}
             className={`rounded-xl border px-3 py-4 text-lg font-semibold tabular-nums disabled:opacity-50 ${
-              current === t ? "border-stone-900 bg-stone-900 text-white" : "border-stone-300 bg-white active:bg-stone-100"
+              current === w.from ? "border-stone-900 bg-stone-900 text-white" : "border-stone-300 bg-white active:bg-stone-100"
             }`}
           >
-            {t.replace(/^0/, "")}
+            {w.from.replace(/^0/, "")} – {w.to.replace(/^0/, "")}
           </button>
         ))}
       </div>

@@ -8,7 +8,7 @@ export function ArrivalSettingsForm({ s }: { s: { enabled: boolean; askHour: num
   const [state, action] = useActionState(saveArrivalSettingsAction, null);
   return (
     <form action={action} className="space-y-3">
-      <Field label="Tijden om uit te kiezen (komma ertussen)">
+      <Field label="Grenzen van de tijdblokken (komma ertussen; 07:30, 07:45, 08:00 geeft 7:30–7:45 en 7:45–8:00)">
         <Input name="times" defaultValue={s.times.join(", ")} />
       </Field>
       <div className="grid grid-cols-2 gap-3">
@@ -22,7 +22,7 @@ export function ArrivalSettingsForm({ s }: { s: { enabled: boolean; askHour: num
       <Field label="Onderwerp ({datum} wordt ingevuld)">
         <Input name="subject" defaultValue={s.subject} />
       </Field>
-      <Field label="Tekst ({naam}, {datum} en {tijd} worden ingevuld)">
+      <Field label="Tekst ({naam}, {datum} en {tijd} worden ingevuld; {tijd} wordt bv. 'tussen 7.45 en 8.00')">
         <Textarea name="body" rows={8} defaultValue={s.body} />
       </Field>
       <label className="flex items-center gap-2 text-sm">

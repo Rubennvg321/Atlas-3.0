@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/db";
 import { Card, PageHeader } from "@/components/server-ui";
 import { ArrivalPicker } from "@/components/arrival-picker";
-import { formatTime, getArrivalRequest } from "@/server/arrival";
+import { formatWindow, getArrivalRequest } from "@/server/arrival";
 import { dayKey } from "@/lib/montage-days";
 
 export const metadata = { title: "Aankomsttijd" };
@@ -34,17 +34,17 @@ export default async function AankomstPage({ params }: { params: Promise<{ id: s
           </p>
         </div>
       </Card>
-      <Card title={sent ? "Andere tijd kiezen" : "Kies je aankomsttijd"}>
+      <Card title={sent ? "Andere tijd kiezen" : "Kies je aankomsttijd (tijdblok)"}>
         {sent && (
           <p className="mb-3 text-sm text-emerald-700">
-            ✓ {formatTime(r.sentTime!)} uur is gemaild naar {r.sentTo}. Kies je een andere tijd, dan krijgt de klant een nieuwe mail.
+            ✓ &ldquo;{formatWindow(r.sentTime!, r.times)} uur&rdquo; is gemaild naar {r.sentTo}. Kies je een andere tijd, dan krijgt de klant een nieuwe mail.
           </p>
         )}
         {r.status === "gekozen" && r.lastError && <p className="mb-3 text-sm text-amber-800">De mail is nog niet verstuurd: {r.lastError}</p>}
         {past ? (
           <p className="text-sm text-stone-500">Deze montage is al begonnen.</p>
         ) : (
-          <ArrivalPicker id={r.id} times={r.times} current={r.chosenTime} disabled={!r.customer.email} shownError={r.status === "gekozen" ? r.lastError : null} />
+          <ArrivalPicker id={r.id} windows={r.windows} current={r.chosenTime} disabled={!r.customer.email} shownError={r.status === "gekozen" ? r.lastError : null} />
         )}
       </Card>
       <p className="text-center text-sm">

@@ -10,7 +10,7 @@ async function trajectCustomer(db: DbOrTx, trajectId: string) {
   return t.customerId;
 }
 
-export async function createTask(db: DbOrTx, input: { trajectId: string; title: string; dueAt?: Date | null; userId?: string | null }) {
+export async function createTask(db: DbOrTx, input: { trajectId: string; title: string; dueAt?: Date | null; dueHasTime?: boolean; userId?: string | null }) {
   if (!input.title.trim()) throw new DomainError("Geef de taak een omschrijving.");
   return db.transaction(async (tx) => {
     const customerId = await trajectCustomer(tx, input.trajectId);
@@ -21,6 +21,7 @@ export async function createTask(db: DbOrTx, input: { trajectId: string; title: 
         customerId,
         title: input.title.trim(),
         dueAt: input.dueAt ?? null,
+        dueHasTime: !!input.dueAt && !!input.dueHasTime,
         assigneeId: input.userId ?? null,
         createdBy: input.userId ?? null,
       })
@@ -46,7 +47,7 @@ export async function setTaskDone(db: DbOrTx, taskId: string, done: boolean, use
   });
 }
 
-export async function updateTask(db: DbOrTx, taskId: string, data: { title?: string; dueAt?: Date | null }) {
+export async function updateTask(db: DbOrTx, taskId: string, data: { title?: string; dueAt?: Date | null; dueHasTime?: boolean }) {
   const [task] = await db.update(tasks).set({ ...data, updatedAt: new Date() }).where(eq(tasks.id, taskId)).returning();
   if (!task) throw new NotFoundError("Taak");
   return task;

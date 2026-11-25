@@ -13,6 +13,7 @@ import { decrypt } from "../server/crypto";
 import { getIntegration, isDue, runTracked, type Provider } from "../server/integrations/state";
 import { deliverPending, liveSender } from "../server/notify";
 import { planArrivalRequests, retryArrivalMails } from "../server/arrival";
+import { planTaskReminders } from "../server/task-reminders";
 
 /**
  * Achtergrondproces: draait elke 30 seconden en start synchronisaties die aan
@@ -68,6 +69,8 @@ async function tick() {
     }
     // Meldingen versturen die klaarstaan (bv. "Nieuwe aanvraag" van de Gmail-ronde hierboven).
     try {
+      // Taken die nu hun datum/tijd bereiken (elke ronde, dus op ongeveer 30 seconden nauwkeurig).
+      await planTaskReminders(db);
       await deliverPending(db, await liveSender(db));
     } catch (e) {
       console.error("meldingen:", e);

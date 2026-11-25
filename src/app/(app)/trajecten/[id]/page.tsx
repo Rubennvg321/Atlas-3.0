@@ -156,7 +156,7 @@ export default async function TrajectPage({ params, searchParams }: { params: Pr
                 <TaskItem
                   key={task.id}
                   path={path}
-                  task={{ id: task.id, title: task.title, dueAt: task.dueAt?.toISOString() ?? null, doneAt: task.doneAt?.toISOString() ?? null }}
+                  task={{ id: task.id, title: task.title, dueAt: task.dueAt?.toISOString() ?? null, dueHasTime: task.dueHasTime, doneAt: task.doneAt?.toISOString() ?? null }}
                 />
               ))}
             </ul>

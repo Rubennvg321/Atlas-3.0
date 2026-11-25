@@ -69,7 +69,7 @@ export default async function TasksPage() {
               <ul className="divide-y divide-stone-100">
                 {items.map((r) => (
                   <div key={r.task.id}>
-                    <TaskItem path="/taken" task={{ id: r.task.id, title: r.task.title, dueAt: r.task.dueAt?.toISOString() ?? null, doneAt: null }} />
+                    <TaskItem path="/taken" task={{ id: r.task.id, title: r.task.title, dueAt: r.task.dueAt?.toISOString() ?? null, dueHasTime: r.task.dueHasTime, doneAt: null }} />
                     <Link href={`/trajecten/${r.task.trajectId}`} className="-mt-1 mb-2 block pl-8 text-xs text-sky-700 underline">
                       {r.customerName}
                       {r.city ? `, ${r.city}` : ""} · #{r.trajectNumber}

@@ -69,9 +69,9 @@ Ideeën: conversie, doorlooptijd, montageplanning. Nieuwe widget = nieuw bestand
 
 ## 11c. Meldingen en de app op de telefoon
 *"Ik wil een melding toevoegen of iets aanpassen aan de Atlas-app op mijn telefoon."*
-Pushmeldingen (nu: nieuwe aanvraag), per soort aan/uit, apparaten, testmelding; installeerbare app (manifest, pictogrammen).
+Pushmeldingen (nieuwe aanvraag, aankomsttijd, taak bereikt datum/tijd), per soort aan/uit, apparaten, testmelding; installeerbare app (manifest, pictogrammen).
 Nieuwe soort melding = regel in `src/lib/notification-types.ts` + `queueNotification()` waar het gebeurt.
-`src/server/notify.ts`, `src/app/(app)/meldingen/`, `src/components/push-setup.tsx`, `public/sw.js`, `src/app/manifest.ts`
+`src/server/notify.ts`, `src/server/task-reminders.ts`, `src/app/(app)/meldingen/`, `src/components/push-setup.tsx`, `public/sw.js`, `src/app/manifest.ts`
 
 ## 11d. Aankomstmail voor montages
 *"Ik wil iets aanpassen aan de aankomstmail voor montages."*

@@ -9,6 +9,10 @@ export const NOTIFICATION_TYPES = {
     label: "Aankomsttijd kiezen voor een montage",
     description: "Twee dagen voor de eerste montagedag: kies hoe laat je aankomt, Atlas mailt de klant.",
   },
+  taak: {
+    label: "Taak bereikt zijn datum/tijd",
+    description: "Op het gekozen tijdstip, of om 08:00 als de taak alleen een datum heeft.",
+  },
   test: { label: "Testmelding", description: "Alleen via de knop 'Testmelding sturen'.", hidden: true },
 } as const satisfies Record<string, { label: string; description: string; hidden?: boolean }>;
 

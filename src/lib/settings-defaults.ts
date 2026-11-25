@@ -78,7 +78,7 @@ export const DEFAULT_SETTINGS = {
       "Beste {naam},\n\nOp {datum} komen wij uw trap renoveren. Wij verwachten {tijd} uur bij u te zijn.\n\nMocht er iets veranderen of heeft u nog vragen, dan kunt u op deze e-mail reageren.\n\nMet vriendelijke groet,\nSteps & Stairs",
   },
   /** Meldingen per soort aan (true) of uit (false). Zie src/lib/notification-types.ts. */
-  notifications: { types: { nieuwe_lead: true, aankomsttijd: true } as Record<string, boolean> },
+  notifications: { types: { nieuwe_lead: true, aankomsttijd: true, taak: true } as Record<string, boolean> },
   /** Dagen zonder volgende actie waarna een kaart opvalt. */
   board: { staleAfterDays: 7 },
   /** Dashboard: omzetdoel per maand (excl. btw). 0 = geen doel. */

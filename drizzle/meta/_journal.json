@@ -64,6 +64,13 @@
       "when": 1795587917902,
       "tag": "0008_aankomsttijd",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795589149147,
+      "tag": "0009_taak_meldingen",
+      "breakpoints": true
     }
   ]
 }

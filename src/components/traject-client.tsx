@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import clsx from "clsx";
 import { addNoteAction, addTaskAction, deleteTaskAction, moveTrajectAction, toggleTaskAction, updateTrajectAction } from "@/app/actions";
 import { isOverdue, relativeDays, shortDate } from "@/lib/format";
+import { amsterdamClock } from "@/lib/zoned";
 import { StageSelect, type StageOption } from "./stage-control";
 import { Button, Field, FormMessage, Input, SubmitButton, Textarea } from "./ui";
 import { AddressSearch } from "./address-search";
@@ -61,19 +62,26 @@ export function TaskForm({ trajectId }: { trajectId: string }) {
     <form ref={ref} action={action} className="space-y-2">
       <input type="hidden" name="trajectId" value={trajectId} />
       <Input name="title" placeholder="Volgende actie, bijv. offerte opsturen" required />
-      <div className="flex items-center gap-2">
-        <label className="flex flex-1 items-center gap-2 text-xs text-stone-600">
-          Deadline
-          <input name="dueAt" type="date" aria-label="Deadline" className="min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-2 py-1.5" />
+      <div className="grid grid-cols-[minmax(0,1fr)_7rem] gap-2">
+        <label className="text-xs text-stone-600">
+          Datum
+          <input name="dueAt" type="date" className="mt-0.5 block w-full min-w-0 rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm" />
         </label>
+        <label className="text-xs text-stone-600">
+          Tijd (optioneel)
+          <input name="dueTime" type="time" step={300} className="mt-0.5 block w-full rounded-lg border border-stone-300 bg-white px-2 py-1.5 text-sm" />
+        </label>
+      </div>
+      <div className="flex justify-end">
         <SubmitButton>Toevoegen</SubmitButton>
       </div>
+      <p className="text-xs text-stone-500">Je krijgt een melding op de gekozen tijd; zonder tijd om 08:00 op die dag.</p>
       <FormMessage state={state} />
     </form>
   );
 }
 
-export function TaskItem({ task, path }: { task: { id: string; title: string; dueAt: string | null; doneAt: string | null }; path: string }) {
+export function TaskItem({ task, path }: { task: { id: string; title: string; dueAt: string | null; dueHasTime?: boolean; doneAt: string | null }; path: string }) {
   const [pending, start] = useTransition();
   const done = !!task.doneAt;
   const overdue = !done && isOverdue(task.dueAt);
@@ -88,7 +96,12 @@ export function TaskItem({ task, path }: { task: { id: string; title: string; du
       />
       <div className="min-w-0 flex-1">
         <p className={clsx("text-sm", done && "text-stone-400 line-through")}>{task.title}</p>
-        {task.dueAt && <p className={clsx("text-xs", overdue ? "font-medium text-red-700" : "text-stone-500")}>{overdue ? relativeDays(task.dueAt) : shortDate(task.dueAt)}</p>}
+        {task.dueAt && (
+          <p className={clsx("text-xs", overdue ? "font-medium text-red-700" : "text-stone-500")}>
+            {overdue ? relativeDays(task.dueAt) : shortDate(task.dueAt)}
+            {task.dueHasTime && ` · ${amsterdamClock(new Date(task.dueAt))}`}
+          </p>
+        )}
       </div>
       <button className="text-xs text-stone-400 hover:text-red-600" onClick={() => start(() => deleteTaskAction(task.id, path))} aria-label="Verwijderen">
         ✕

@@ -328,6 +328,10 @@ export const tasks = pgTable(
     customerId: uuid("customer_id").references(() => customers.id),
     title: text("title").notNull(),
     dueAt: timestamp("due_at", { withTimezone: true }),
+    /** true = er is een tijd gekozen (melding op dat moment); false = alleen een datum (melding om 08:00). */
+    dueHasTime: boolean("due_has_time").notNull().default(false),
+    /** Moment waarvoor al een melding is gestuurd; wijzigt de deadline, dan komt er een nieuwe. */
+    remindedFor: timestamp("reminded_for", { withTimezone: true }),
     assigneeId: uuid("assignee_id").references(() => users.id),
     doneAt: timestamp("done_at", { withTimezone: true }),
     createdBy: uuid("created_by").references(() => users.id),

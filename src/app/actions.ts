@@ -19,6 +19,7 @@ import { eq } from "drizzle-orm";
 import { normalizeAddition, normalizePostcode, tidyCity } from "@/lib/normalize";
 import { EVENT_TARGET } from "@/lib/stage-rules";
 import { parseEuro } from "@/lib/finance";
+import { amsterdamTime } from "@/lib/zoned";
 import { setManualFinance } from "@/server/finance";
 import { addManualPurchase, deletePurchase, linkPurchase } from "@/server/purchases";
 import { decideProposal } from "@/server/automation";
@@ -238,9 +239,13 @@ export async function addTaskAction(_prev: ActionResult | null, fd: FormData): P
   const user = await requireUser();
   const trajectId = str(fd, "trajectId")!;
   const due = str(fd, "dueAt");
-  const res = await run(() =>
-    createTask(getDb(), { trajectId, title: str(fd, "title") ?? "", dueAt: due ? new Date(`${due}T17:00:00`) : null, userId: user.id }),
-  );
+  const time = str(fd, "dueTime");
+  if (time && !due) return { ok: false, error: "Kies ook een datum bij de tijd." };
+  if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due)) return { ok: false, error: "Ongeldige datum." };
+  if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return { ok: false, error: "Ongeldige tijd." };
+  // Nederlandse tijd (de server draait in UTC). Zonder tijd: einde werkdag, melding om 08:00.
+  const dueAt = due ? amsterdamTime(due, time ?? "17:00") : null;
+  const res = await run(() => createTask(getDb(), { trajectId, title: str(fd, "title") ?? "", dueAt, dueHasTime: !!time, userId: user.id }));
   revalidatePath(`/trajecten/${trajectId}`);
   revalidatePath("/bord");
   revalidatePath("/taken");

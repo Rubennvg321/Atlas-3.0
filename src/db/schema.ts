@@ -549,3 +549,36 @@ export const notifications = pgTable(
   },
   (t) => [index("notifications_status_idx").on(t.status, t.createdAt)],
 );
+
+// ---------------------------------------------------------------------------
+// Aankomsttijd: Atlas vraagt 2 dagen voor de montage hoe laat je aankomt en mailt de klant
+// ---------------------------------------------------------------------------
+
+export const arrivalRequests = pgTable(
+  "arrival_requests",
+  {
+    id: id(),
+    trajectId: uuid("traject_id")
+      .notNull()
+      .references(() => trajects.id),
+    customerId: uuid("customer_id")
+      .notNull()
+      .references(() => customers.id),
+    /** Eerste dag van de montage, "JJJJ-MM-DD" (Nederlandse tijd). */
+    montageDate: text("montage_date").notNull(),
+    /** open | versturen | gekozen (mail nog niet gelukt) | verstuurd | overgeslagen */
+    status: text("status").notNull().default("open"),
+    /** Gekozen aankomsttijd, bv. "07:45". */
+    chosenTime: text("chosen_time"),
+    chosenAt: timestamp("chosen_at", { withTimezone: true }),
+    askedAt: timestamp("asked_at", { withTimezone: true }).notNull().defaultNow(),
+    remindedAt: timestamp("reminded_at", { withTimezone: true }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    sentTo: text("sent_to"),
+    /** Tijd waarvoor de laatste mail is verstuurd (bij een wijziging gaat er een nieuwe mail). */
+    sentTime: text("sent_time"),
+    lastError: text("last_error"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex("arrival_traject_date_uq").on(t.trajectId, t.montageDate), index("arrival_status_idx").on(t.status)],
+);

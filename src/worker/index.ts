@@ -12,6 +12,7 @@ import { runDaily } from "../server/daily";
 import { decrypt } from "../server/crypto";
 import { getIntegration, isDue, runTracked, type Provider } from "../server/integrations/state";
 import { deliverPending, liveSender } from "../server/notify";
+import { planArrivalRequests, retryArrivalMails } from "../server/arrival";
 
 /**
  * Achtergrondproces: draait elke 30 seconden en start synchronisaties die aan
@@ -58,7 +59,11 @@ async function tick() {
           const { token, account } = await getAccessToken(db);
           gmail = liveGmail(token, account);
         }
-        return runDaily(db, gmail);
+        let n = await runDaily(db, gmail);
+        // Aankomsttijd: 2 dagen voor de montage vragen (pushmelding) en mislukte mails opnieuw.
+        n += await planArrivalRequests(db);
+        n += await retryArrivalMails(db, gmail);
+        return n;
       });
     }
     // Meldingen versturen die klaarstaan (bv. "Nieuwe aanvraag" van de Gmail-ronde hierboven).

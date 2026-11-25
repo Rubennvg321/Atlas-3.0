@@ -73,6 +73,11 @@ Pushmeldingen (nu: nieuwe aanvraag), per soort aan/uit, apparaten, testmelding; 
 Nieuwe soort melding = regel in `src/lib/notification-types.ts` + `queueNotification()` waar het gebeurt.
 `src/server/notify.ts`, `src/app/(app)/meldingen/`, `src/components/push-setup.tsx`, `public/sw.js`, `src/app/manifest.ts`
 
+## 11d. Aankomstmail voor montages
+*"Ik wil iets aanpassen aan de aankomstmail voor montages."*
+2 dagen voor de eerste montagedag: pushmelding "Hoe laat kom je aan?", kwartierknoppen, mail naar de klant, herinnering om 16:00.
+Tekst/tijden: Koppelingen → Aankomstmail. `src/server/arrival.ts`, `src/app/(app)/aankomst/`, `src/components/arrival-picker.tsx`
+
 ## 12. Import van bestaande klanten
 *"Ik wil bestaande klanten importeren."*
 `src/server/import.ts`, `src/app/(app)/import/`

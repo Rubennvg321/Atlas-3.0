@@ -6,6 +6,7 @@ import { getSetting } from "@/server/settings";
 import { Badge, Card, PageHeader } from "@/components/server-ui";
 import { DisconnectButton, MapsKeyForm, RetryButton, ReviewSettingsForm, WefactKeyForm } from "@/components/koppelingen-client";
 import { dateTime } from "@/lib/format";
+import { ArrivalSettingsForm } from "@/components/arrival-settings-form";
 
 export const metadata = { title: "Koppelingen" };
 
@@ -45,7 +46,7 @@ async function SyncLine({ provider, label }: { provider: "gmail" | "google_calen
 export default async function KoppelingenPage({ searchParams }: { searchParams: Promise<{ gekoppeld?: string; fout?: string }> }) {
   const sp = await searchParams;
   const db = getDb();
-  const [google, wefact, maps, reviews] = await Promise.all([getIntegration(db, "google"), getIntegration(db, "wefact"), getIntegration(db, "google_maps"), getSetting(db, "reviews")]);
+  const [google, wefact, maps, reviews, arrival] = await Promise.all([getIntegration(db, "google"), getIntegration(db, "wefact"), getIntegration(db, "google_maps"), getSetting(db, "reviews"), getSetting(db, "arrivalMail")]);
   const googleConnected = !!google?.encryptedTokens;
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -95,6 +96,14 @@ export default async function KoppelingenPage({ searchParams }: { searchParams: 
 
       <Card title="Reviewverzoeken">
         <ReviewSettingsForm r={reviews} />
+      </Card>
+
+      <Card title="Aankomstmail voor montages">
+        <p className="mb-3 text-sm text-stone-600">
+          Twee dagen voor de eerste montagedag krijg je een pushmelding: hoe laat kom je aan? Na je keuze mailt Atlas de klant via Gmail. Zet
+          meldingen aan via Meer → Meldingen.
+        </p>
+        <ArrivalSettingsForm s={arrival} />
       </Card>
     </div>
   );

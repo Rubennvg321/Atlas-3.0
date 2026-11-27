@@ -29,6 +29,27 @@ export default async function TasksPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <PageHeader title="Taken" />
+      {Object.entries(groups).map(([label, items]) =>
+        items.length || label === "Vandaag" ? (
+          <Card key={label} title={`${label} (${items.length})`} className={label === "Te laat" ? "border-red-200" : ""}>
+            {items.length ? (
+              <ul className="divide-y divide-stone-100">
+                {items.map((r) => (
+                  <div key={r.task.id}>
+                    <TaskItem path="/taken" task={{ id: r.task.id, title: r.task.title, dueAt: r.task.dueAt?.toISOString() ?? null, dueHasTime: r.task.dueHasTime, doneAt: null }} />
+                    <Link href={`/trajecten/${r.task.trajectId}`} className="-mt-1 mb-2 block pl-8 text-xs text-sky-700 underline">
+                      {r.customerName}
+                      {r.city ? `, ${r.city}` : ""} · #{r.trajectNumber}
+                    </Link>
+                  </div>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-stone-500">Niets voor vandaag.</p>
+            )}
+          </Card>
+        ) : null,
+      )}
       {looseQuotes.length > 0 && (
         <Card title={`Offertes te koppelen (${looseQuotes.length})`} className="border-violet-200">
           <p className="mb-2 text-xs text-stone-500">Deze offertes uit WeFact kon Atlas niet met zekerheid aan één traject koppelen.</p>
@@ -61,27 +82,6 @@ export default async function TasksPage() {
             ))}
           </ul>
         </Card>
-      )}
-      {Object.entries(groups).map(([label, items]) =>
-        items.length || label === "Vandaag" ? (
-          <Card key={label} title={`${label} (${items.length})`} className={label === "Te laat" ? "border-red-200" : ""}>
-            {items.length ? (
-              <ul className="divide-y divide-stone-100">
-                {items.map((r) => (
-                  <div key={r.task.id}>
-                    <TaskItem path="/taken" task={{ id: r.task.id, title: r.task.title, dueAt: r.task.dueAt?.toISOString() ?? null, dueHasTime: r.task.dueHasTime, doneAt: null }} />
-                    <Link href={`/trajecten/${r.task.trajectId}`} className="-mt-1 mb-2 block pl-8 text-xs text-sky-700 underline">
-                      {r.customerName}
-                      {r.city ? `, ${r.city}` : ""} · #{r.trajectNumber}
-                    </Link>
-                  </div>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-stone-500">Niets voor vandaag.</p>
-            )}
-          </Card>
-        ) : null,
       )}
       {idle.length > 0 && (
         <Card title={`Lopende trajecten zonder volgende actie (${idle.length})`} className="border-amber-200">
